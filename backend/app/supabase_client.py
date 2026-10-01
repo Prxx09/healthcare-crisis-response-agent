@@ -8,18 +8,14 @@ from .config import get_settings
 
 
 class SupabaseRepository:
-    """Small server-side client for the Supabase REST API.
-
-    The service-role key is read only from backend environment variables and is
-    never returned to a browser client.
-    """
+    """Small read-only client for the Supabase REST API."""
 
     def __init__(self) -> None:
         settings = get_settings()
         self.base_url = f"{settings.supabase_url.rstrip('/')}/rest/v1"
         self.headers = {
-            "apikey": settings.supabase_service_role_key,
-            "Authorization": f"Bearer {settings.supabase_service_role_key}",
+            "apikey": settings.supabase_publishable_key,
+            "Authorization": f"Bearer {settings.supabase_publishable_key}",
         }
 
     async def get(self, table: str, params: dict[str, str]) -> list[dict[str, Any]]:

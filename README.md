@@ -23,7 +23,7 @@ The generator is deterministic (`seed=42`), so the same input produces the same 
 3. Import `regional_context.csv`.
 4. Import `surveillance_observations.csv`.
 
-The application backend will use a server-only Supabase key for ingestion and analytics. No service key belongs in the dashboard/frontend.
+The initial backend uses the Supabase publishable key for read-only access to synthetic aggregate surveillance tables. Alert decisions and future write operations remain protected and will require authenticated, role-specific policies.
 
 ## Supabase project
 
@@ -31,4 +31,4 @@ The application backend will use a server-only Supabase key for ingestion and an
 - Region: `ap-south-1`
 - Project reference: `jinbmggobfeccvqrnnze`
 
-All five tables have Row Level Security enabled. The current database is intentionally backend-only: it has no browser-access policies yet. When dashboard authentication is added, policies will be defined around authenticated roles and the Incident Commander approval workflow.
+All five tables have Row Level Security enabled. Read-only policies expose only the four synthetic reference and surveillance tables. The `alerts` table remains unavailable to anonymous clients; its write policies will be added with the Incident Commander authentication workflow.

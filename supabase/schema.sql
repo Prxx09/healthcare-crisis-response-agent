@@ -66,6 +66,14 @@ create index if not exists regional_context_lookup_idx
   on public.regional_context (region_id, observation_date desc);
 create index if not exists alerts_review_idx
   on public.alerts (status, created_at desc);
+create index if not exists surveillance_observations_region_idx
+  on public.surveillance_observations (region_id);
+create index if not exists alerts_region_idx
+  on public.alerts (region_id);
+create index if not exists alerts_condition_idx
+  on public.alerts (condition_id);
+create index if not exists alerts_approved_by_idx
+  on public.alerts (approved_by);
 
 -- Tables remain unavailable through the public Data API until explicit role policies are added.
 -- The FastAPI backend is the first access path and keeps its service-role credential server-only.
