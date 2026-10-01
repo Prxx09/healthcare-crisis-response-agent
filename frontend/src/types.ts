@@ -139,3 +139,10 @@ export interface IncidentAction {
   updated_at: string;
   alerts: { alert_level: "monitor" | "investigate" | "escalate"; analysis_date: string; regions: { code: string; name: string }; conditions: { code: string; name: string } };
 }
+export interface TimelineEvent {
+  timestamp: string;
+  event: string;
+  title: string;
+  detail: string;
+}
+export interface IncidentTimeline { alert_id: number; events: TimelineEvent[] }

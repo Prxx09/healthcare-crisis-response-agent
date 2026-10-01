@@ -1,4 +1,4 @@
-import type { AlertRecord, Condition, EvidenceBriefing, ForecastResponse, IncidentAction, InvestigationResponse, Observation, PlaybookLibrary, PlaybookValidation, Region, ResponsePlan, SignalResponse, WorkflowRun } from "./types";
+import type { AlertRecord, Condition, EvidenceBriefing, ForecastResponse, IncidentAction, IncidentTimeline, InvestigationResponse, Observation, PlaybookLibrary, PlaybookValidation, Region, ResponsePlan, SignalResponse, WorkflowRun } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
@@ -65,6 +65,8 @@ export const api = {
   },
   alerts: () => getJson<AlertRecord[]>("/api/v1/alerts?status=pending_approval"),
   actions: () => getJson<IncidentAction[]>("/api/v1/actions"),
+  incidentTimeline: (alertId: number) => getJson<IncidentTimeline>(`/api/v1/incidents/${alertId}/timeline`),
+  situationReportUrl: (alertId: number) => `${API_URL}/api/v1/incidents/${alertId}/report.pdf`,
   generateAlerts: (analysisDate: string, regionCode: string, conditionCode: string) =>
     sendJson<{ analysis_date: string; eligible_clusters: number; created: number }>("/api/v1/alerts/generate", "POST", {
       analysis_date: analysisDate,

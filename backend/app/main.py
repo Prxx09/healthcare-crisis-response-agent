@@ -1,8 +1,10 @@
 import asyncio
 from datetime import date, datetime, timedelta, timezone
+from io import BytesIO
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 import httpx
 
 from .config import get_settings
@@ -14,6 +16,7 @@ from .models import ActionUpdateRequest, AlertDecisionRequest, AlertGenerationRe
 from .playbook_documents import MAX_FILE_BYTES, SUPPORTED_EXTENSIONS, parse_playbook_document
 from .playbook_engine import select_response_plan
 from .orchestrator import run_workflow
+from .reporting import build_situation_report, build_timeline
 from .signal_engine import detect_source_signals, summarise_clusters
 from .supabase_client import SupabaseRepository
 
@@ -202,6 +205,36 @@ async def actions(status: str | None = None) -> list[dict]:
         raise HTTPException(status_code=503, detail=str(error)) from error
     except httpx.HTTPError as error:
         raise HTTPException(status_code=502, detail="Unable to read incident actions") from error
+
+
+@app.get("/api/v1/incidents/{alert_id}/timeline")
+async def incident_timeline(alert_id: int) -> dict:
+    repository = SupabaseRepository()
+    try:
+        alert, action_rows_result = await asyncio.gather(repository.get_alert(alert_id), repository.get_actions(alert_id=alert_id))
+    except RuntimeError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except httpx.HTTPError as error:
+        raise HTTPException(status_code=502, detail="Unable to build incident timeline") from error
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    return {"alert_id": alert_id, "events": build_timeline(alert, action_rows_result)}
+
+
+@app.get("/api/v1/incidents/{alert_id}/report.pdf")
+async def situation_report(alert_id: int) -> StreamingResponse:
+    repository = SupabaseRepository()
+    try:
+        alert, action_rows_result = await asyncio.gather(repository.get_alert(alert_id), repository.get_actions(alert_id=alert_id))
+    except RuntimeError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except httpx.HTTPError as error:
+        raise HTTPException(status_code=502, detail="Unable to prepare situation report") from error
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    pdf = build_situation_report(alert, action_rows_result)
+    filename = f"situation-report-alert-{alert_id}.pdf"
+    return StreamingResponse(BytesIO(pdf), media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
 
 @app.post("/api/v1/alerts/generate")

@@ -95,7 +95,7 @@ class SupabaseRepository:
 
     async def get_alert(self, alert_id: int) -> dict[str, Any] | None:
         rows = await self.privileged_get("alerts", {
-            "select": "id,analysis_date,alert_level,evidence_summary,rule_version,status,regions!inner(code,name),conditions!inner(code,name)",
+            "select": "id,analysis_date,alert_level,evidence_summary,rule_version,status,reviewed_by,review_note,approved_at,created_at,regions!inner(code,name),conditions!inner(code,name)",
             "id": f"eq.{alert_id}",
             "limit": "1",
         })
@@ -107,13 +107,15 @@ class SupabaseRepository:
     async def decide_alert(self, alert_id: int, payload: dict[str, Any]) -> list[dict[str, Any]]:
         return await self.patch("alerts", {"id": f"eq.{alert_id}", "status": "eq.pending_approval"}, payload)
 
-    async def get_actions(self, status: str | None = None) -> list[dict[str, Any]]:
+    async def get_actions(self, status: str | None = None, alert_id: int | None = None) -> list[dict[str, Any]]:
         params = {
             "select": "id,alert_id,action_key,category,action_text,owner_role,assignee_name,timeframe,due_at,status,completion_note,completed_at,created_at,updated_at,alerts!inner(alert_level,analysis_date,regions!inner(code,name),conditions!inner(code,name))",
             "order": "created_at.desc",
         }
         if status:
             params["status"] = f"eq.{status}"
+        if alert_id is not None:
+            params["alert_id"] = f"eq.{alert_id}"
         return await self.privileged_get("incident_actions", params)
 
     async def create_actions(self, payload: list[dict[str, Any]]) -> list[dict[str, Any]]:

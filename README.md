@@ -51,6 +51,8 @@ The orchestration endpoint runs the complete surveillance workflow as one trace.
 
 Approved alerts create an idempotent set of incident actions from the selected response playbook. Actions record the responsible role, optional assignee, timeframe, calculated due time, current status, and completion note. The action table is protected like the alert table and remains inaccessible to anonymous or authenticated browser clients.
 
+Each alert also exposes a chronological incident timeline derived from its creation, decision, and action updates. A downloadable PDF situation report presents the alert scope, evidence, decision record, and action status in a stakeholder-ready layout.
+
 ## Import order after the Supabase project is created
 
 1. Run `supabase/schema.sql` in Supabase SQL Editor.
