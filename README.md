@@ -45,6 +45,8 @@ Versioned response playbooks are stored in `playbooks/response_playbooks.json`. 
 
 The playbook validation endpoint accepts PDF, DOCX, YAML and JSON files up to 5 MB. It extracts and validates a normalized playbook, reports file metadata and action counts, and never replaces the active playbook automatically. See `playbooks/README.md` for the document markers and required schema.
 
+The briefing endpoint converts prepared evidence into a concise stakeholder summary. It works without credentials through a deterministic template. Optional Groq and Hugging Face providers use their OpenAI-compatible chat-completion endpoints and fall back safely if configuration or model output is invalid. The language model cannot change alert levels, evidence, playbooks, or approval decisions.
+
 ## Import order after the Supabase project is created
 
 1. Run `supabase/schema.sql` in Supabase SQL Editor.

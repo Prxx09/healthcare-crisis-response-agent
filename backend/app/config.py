@@ -8,6 +8,11 @@ class Settings(BaseSettings):
     supabase_publishable_key: str
     supabase_secret_key: str | None = None
     allowed_origins: str = "http://localhost:5173"
+    ai_provider: str = "deterministic"
+    groq_api_key: str | None = None
+    groq_model: str | None = None
+    huggingface_token: str | None = None
+    huggingface_model: str | None = None
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

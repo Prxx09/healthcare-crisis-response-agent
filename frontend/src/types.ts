@@ -93,3 +93,15 @@ export interface PlaybookValidation {
   source: { filename: string; format: string; size_bytes: number; sha256: string };
   summary: { version: string; conditions: string[]; action_counts: Record<string, number> };
 }
+export interface EvidenceBriefing {
+  provider: "deterministic" | "groq" | "huggingface";
+  model: string | null;
+  generated_at: string;
+  headline: string;
+  situation: string;
+  evidence: string[];
+  uncertainties: string[];
+  recommended_review: string;
+  disclaimer: string;
+  fallback_reason?: string;
+}

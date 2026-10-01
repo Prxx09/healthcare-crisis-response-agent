@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import httpx
 
 from .config import get_settings
+from .briefing_engine import generate_briefing
 from .forecast_engine import build_scenarios
 from .investigation_engine import investigate_cluster
 from .models import AlertDecisionRequest, AlertGenerationRequest
@@ -114,6 +115,42 @@ async def response_plan(
         return select_response_plan(condition_code, alert_level)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@app.get("/api/v1/briefing")
+async def briefing(
+    analysis_date: date = Query(...),
+    region_code: str = Query(...),
+    condition_code: str = Query(...),
+) -> dict:
+    start_date = analysis_date - timedelta(days=28)
+    repository = SupabaseRepository()
+    try:
+        rows, context = await asyncio.gather(
+            repository.get_observations(start_date.isoformat(), analysis_date.isoformat(), region_code, condition_code),
+            repository.get_regional_context((analysis_date - timedelta(days=13)).isoformat(), analysis_date.isoformat(), region_code),
+        )
+        clusters = summarise_clusters(detect_source_signals(rows, analysis_date, 28))
+        cluster = next((item for item in clusters if item["region_code"] == region_code and item["condition_code"] == condition_code), None)
+        investigation_rows = [row for row in rows if row["observation_date"] >= (analysis_date - timedelta(days=13)).isoformat()]
+        investigation_result = investigate_cluster(investigation_rows, context, analysis_date)
+        forecast_result = build_scenarios(rows, analysis_date, 7)
+        region_name = rows[0]["regions"]["name"] if rows else region_code
+        condition_name = rows[0]["conditions"]["name"] if rows else condition_code
+        evidence = {
+            "analysis_date": analysis_date.isoformat(),
+            "region_name": region_name,
+            "condition_name": condition_name,
+            "cluster": cluster,
+            "investigation": investigation_result,
+            "forecast": forecast_result,
+            "response_plan": select_response_plan(condition_code, cluster["level"]) if cluster else None,
+        }
+        return await generate_briefing(evidence, settings)
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except httpx.HTTPError as error:
+        raise HTTPException(status_code=502, detail="Unable to prepare briefing evidence") from error
 
 
 @app.get("/api/v1/playbooks")

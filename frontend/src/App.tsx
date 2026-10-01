@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Activity, AlertTriangle, CheckCircle2, Database, FileCheck2, RefreshCw, ShieldCheck, Upload, XCircle } from "lucide-react";
+import { Activity, AlertTriangle, CheckCircle2, Database, FileCheck2, RefreshCw, ShieldCheck, Sparkles, Upload, XCircle } from "lucide-react";
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api } from "./api";
-import type { AlertRecord, Cluster, Condition, ForecastResponse, InvestigationResponse, Observation, PlaybookLibrary, PlaybookValidation, Region, ResponsePlan, SignalResponse } from "./types";
+import type { AlertRecord, Cluster, Condition, EvidenceBriefing, ForecastResponse, InvestigationResponse, Observation, PlaybookLibrary, PlaybookValidation, Region, ResponsePlan, SignalResponse } from "./types";
 
 const SOURCE_LABELS: Record<string, string> = { visits: "Visits", lab_positives: "Lab positives", pharmacy_demand: "Pharmacy demand" };
 
@@ -39,6 +39,8 @@ export default function App() {
   const [playbookValidation, setPlaybookValidation] = useState<PlaybookValidation | null>(null);
   const [playbookMessage, setPlaybookMessage] = useState<string | null>(null);
   const [playbookLoading, setPlaybookLoading] = useState(false);
+  const [briefing, setBriefing] = useState<EvidenceBriefing | null>(null);
+  const [briefingLoading, setBriefingLoading] = useState(false);
 
   useEffect(() => {
     Promise.all([api.regions(), api.conditions()])
@@ -87,6 +89,13 @@ export default function App() {
     } catch (reason) {
       setPlaybookMessage(reason instanceof Error ? reason.message : "Unable to validate the playbook.");
     } finally { setPlaybookLoading(false); }
+  }
+
+  async function generateBriefing() {
+    setBriefingLoading(true);
+    try { setBriefing(await api.briefing(analysisDate, region, condition)); }
+    catch { setError("The evidence briefing could not be generated."); }
+    finally { setBriefingLoading(false); }
   }
 
   async function generateAlert() {
@@ -189,7 +198,7 @@ export default function App() {
             <div className="chart-wrap"><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" stroke="#e7edf3" /><XAxis dataKey="date" tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} /><Tooltip /><Legend /><Line type="monotone" dataKey="visits" name="Visits" stroke="#1261a0" strokeWidth={2.5} dot={false} /><Line type="monotone" dataKey="lab_positives" name="Lab positives" stroke="#dc6b35" strokeWidth={2} dot={false} /><Line type="monotone" dataKey="pharmacy_demand" name="Pharmacy demand" stroke="#2c9c83" strokeWidth={2} dot={false} /></LineChart></ResponsiveContainer></div>
           </article>
 
-          <article className="card panel evidence-panel"><div className="panel-heading"><div><h2>Evidence review</h2><p>Transparent rule output for the selected date</p></div>{selectedClusters.some((item) => item.corroborated && item.level !== "monitor") && <button className="generate-button" onClick={generateAlert} disabled={alertLoading}>Send to review</button>}</div>
+          <article className="card panel evidence-panel"><div className="panel-heading"><div><h2>Evidence review</h2><p>Transparent rule output for the selected date</p></div><div className="evidence-actions"><button className="briefing-button" onClick={generateBriefing} disabled={briefingLoading}><Sparkles size={13} /> {briefingLoading ? "Preparing…" : "Prepare briefing"}</button>{selectedClusters.some((item) => item.corroborated && item.level !== "monitor") && <button className="generate-button" onClick={generateAlert} disabled={alertLoading}>Send to review</button>}</div></div>
             {selectedClusters.length === 0 ? <div className="empty"><CheckCircle2 size={34} /><strong>No threshold crossed</strong><p>The current values remain within the configured review thresholds.</p></div> : selectedClusters.map((cluster) => <div className="cluster" key={`${cluster.region_code}-${cluster.condition_code}`}><div className="cluster-title"><span className={`level ${cluster.level}`}>{levelLabel(cluster.level)}</span><strong>{cluster.corroborated ? "Corroborated signal" : "Single-source signal"}</strong></div>{cluster.signals.map((signal) => <div className="signal-row" key={signal.signal_source}><span>{SOURCE_LABELS[signal.signal_source] ?? signal.signal_source}</span><strong>{signal.current_count}</strong><small>{signal.percent_change > 0 ? "+" : ""}{signal.percent_change}% vs baseline</small></div>)}</div>)}
           </article>
         </section>
@@ -200,6 +209,7 @@ export default function App() {
           <div className="investigation-grid"><div><strong>Source comparison</strong><div className="source-cards">{investigation?.source_comparison.map((item) => <div key={item.signal_source}><span>{SOURCE_LABELS[item.signal_source] ?? item.signal_source}</span><strong>{item.latest_count}</strong><small>{item.window_change_pct > 0 ? "+" : ""}{item.window_change_pct}% across window</small></div>)}</div></div><div><strong>Regional context</strong><dl className="context-list"><div><dt>Rainfall index</dt><dd>{investigation?.regional_context.average_rainfall_index ?? "—"}</dd></div><div><dt>Mobility index</dt><dd>{investigation?.regional_context.average_mobility_index ?? "—"}</dd></div><div><dt>Temperature</dt><dd>{investigation?.regional_context.average_temperature_c ?? "—"}°C</dd></div></dl></div><div><strong>Investigation findings</strong><ul className="finding-list">{investigation?.findings.map((item) => <li key={item}>{item}</li>)}</ul></div></div>
         </section>
         {responsePlan && <section className="card response-panel"><div className="panel-heading"><div><h2>Recommended response playbook</h2><p>Version {responsePlan.playbook_version} · Actions remain behind the human approval gate</p></div><span className={`level ${responsePlan.alert_level}`}>{levelLabel(responsePlan.alert_level)}</span></div><div className="response-grid"><div className="action-list">{responsePlan.actions.map((item) => <div className="response-action" key={`${item.category}-${item.action}`}><span>{item.category}</span><div><strong>{item.action}</strong><p>{item.owner} · {item.timeframe}</p></div>{item.requires_approval && <small>Approval required</small>}</div>)}</div><aside><strong>Condition guidance</strong>{responsePlan.condition_guidance.map((item) => <p key={item}>{item}</p>)}<div className="boundary-note">{responsePlan.boundary}</div></aside></div></section>}
+        {briefing && <section className="card briefing-panel"><div className="briefing-header"><Sparkles size={23} /><div><span>Evidence briefing · {briefing.provider}{briefing.model ? ` · ${briefing.model}` : ""}</span><h2>{briefing.headline}</h2></div></div><p className="briefing-situation">{briefing.situation}</p><div className="briefing-columns"><div><strong>Supporting evidence</strong><ul>{briefing.evidence.map((item) => <li key={item}>{item}</li>)}</ul></div><div><strong>Uncertainties</strong><ul>{briefing.uncertainties.map((item) => <li key={item}>{item}</li>)}</ul></div></div><div className="review-callout"><strong>Recommended review</strong><p>{briefing.recommended_review}</p></div>{briefing.fallback_reason && <p className="fallback-note">Fallback used: {briefing.fallback_reason}</p>}<small>{briefing.disclaimer}</small></section>}
         </>}
 
         <footer>Rules calculate alert levels · AI language support will summarize prepared evidence · Incident Commander retains approval authority</footer>
