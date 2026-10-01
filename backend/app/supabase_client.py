@@ -75,6 +75,15 @@ class SupabaseRepository:
             params["conditions.code"] = f"eq.{condition_code}"
         return await self.get("surveillance_observations", params)
 
+    async def get_regional_context(self, start_date: str, end_date: str, region_code: str) -> list[dict[str, Any]]:
+        return await self.get("regional_context", {
+            "select": "observation_date,rainfall_index,mobility_index,temperature_c,context_note,regions!inner(code,name)",
+            "observation_date": f"gte.{start_date}",
+            "and": f"(observation_date.lte.{end_date})",
+            "regions.code": f"eq.{region_code}",
+            "order": "observation_date.asc",
+        })
+
     async def get_alerts(self, status: str | None = None) -> list[dict[str, Any]]:
         params = {
             "select": "id,analysis_date,alert_level,evidence_summary,rule_version,status,reviewed_by,review_note,approved_at,created_at,regions!inner(code,name),conditions!inner(code,name)",

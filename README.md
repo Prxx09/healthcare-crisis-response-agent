@@ -39,6 +39,10 @@ The dashboard expects the API at `http://localhost:8000` by default. Copy `front
 
 The command dashboard includes a transparent seven-day scenario forecast for the selected region and condition. It compares the most recent seven days with the preceding seven days, then displays bounded best-case, expected, and worst-case visit trajectories. These scenarios are planning aids, not epidemiological predictions.
 
+The investigation panel correlates surveillance sources across a fourteen-day review window, identifies peak activity, summarizes data quality, and adds regional rainfall, mobility, and temperature context. Regional indicators are presented as context only and are not treated as causal evidence.
+
+Versioned response playbooks are stored in `playbooks/response_playbooks.json`. The API selects bounded investigation, readiness, coordination, and communication actions by alert level and condition. Controlled actions remain subject to Incident Commander approval.
+
 ## Import order after the Supabase project is created
 
 1. Run `supabase/schema.sql` in Supabase SQL Editor.

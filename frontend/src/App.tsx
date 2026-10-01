@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Activity, AlertTriangle, CheckCircle2, Database, RefreshCw, ShieldCheck, XCircle } from "lucide-react";
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api } from "./api";
-import type { AlertRecord, Cluster, Condition, ForecastResponse, Observation, Region, SignalResponse } from "./types";
+import type { AlertRecord, Cluster, Condition, ForecastResponse, InvestigationResponse, Observation, Region, ResponsePlan, SignalResponse } from "./types";
 
 const SOURCE_LABELS: Record<string, string> = { visits: "Visits", lab_positives: "Lab positives", pharmacy_demand: "Pharmacy demand" };
 
@@ -25,6 +25,8 @@ export default function App() {
   const [observations, setObservations] = useState<Observation[]>([]);
   const [signals, setSignals] = useState<SignalResponse | null>(null);
   const [forecast, setForecast] = useState<ForecastResponse | null>(null);
+  const [investigation, setInvestigation] = useState<InvestigationResponse | null>(null);
+  const [responsePlan, setResponsePlan] = useState<ResponsePlan | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -47,8 +49,9 @@ export default function App() {
       api.observations(isoDaysBefore(analysisDate, 28), analysisDate, region, condition),
       api.signals(analysisDate),
       api.forecast(analysisDate, region, condition),
+      api.investigation(analysisDate, region, condition),
     ])
-      .then(([observationData, signalData, forecastData]) => { setObservations(observationData); setSignals(signalData); setForecast(forecastData); })
+      .then(([observationData, signalData, forecastData, investigationData]) => { setObservations(observationData); setSignals(signalData); setForecast(forecastData); setInvestigation(investigationData); })
       .catch(() => setError("The surveillance API is unavailable. Confirm that the FastAPI service is running."))
       .finally(() => setLoading(false));
   }, [analysisDate, condition, region, refreshKey]);
@@ -112,6 +115,13 @@ export default function App() {
     return [...rows.values()];
   }, [forecast]);
 
+  useEffect(() => {
+    if (activeLevel === "normal") { setResponsePlan(null); return; }
+    api.responsePlan(condition, activeLevel)
+      .then(setResponsePlan)
+      .catch(() => setResponsePlan(null));
+  }, [activeLevel, condition]);
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -158,6 +168,10 @@ export default function App() {
         <section className="card panel forecast-panel"><div className="panel-heading"><div><h2>Seven-day planning scenarios</h2><p>Bounded projections based on recent visit activity—not an epidemiological prediction</p></div>{forecast && <span className="forecast-change">Weekly change {forecast.observed_weekly_change_pct > 0 ? "+" : ""}{forecast.observed_weekly_change_pct}%</span>}</div>
           <div className="forecast-layout"><div className="forecast-chart"><ResponsiveContainer width="100%" height="100%"><LineChart data={forecastChartData}><CartesianGrid strokeDasharray="3 3" stroke="#e7edf3" /><XAxis dataKey="date" tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} /><Tooltip /><Legend /><Line type="monotone" dataKey="best_case" name="Best case" stroke="#2c9c83" strokeWidth={2} dot={false} /><Line type="monotone" dataKey="expected" name="Expected" stroke="#1261a0" strokeWidth={2.5} dot={false} /><Line type="monotone" dataKey="worst_case" name="Worst case" stroke="#cf573f" strokeWidth={2} dot={false} /></LineChart></ResponsiveContainer></div><div className="assumptions"><strong>Model assumptions</strong>{forecast?.assumptions.map((item) => <p key={item}>{item}</p>)}</div></div>
         </section>
+        <section className="card investigation-panel"><div className="panel-heading"><div><h2>Cluster investigation</h2><p>Fourteen-day evidence correlation for the selected scope</p></div>{investigation && <span className="forecast-change">Peak {investigation.peak_date.slice(5)}</span>}</div>
+          <div className="investigation-grid"><div><strong>Source comparison</strong><div className="source-cards">{investigation?.source_comparison.map((item) => <div key={item.signal_source}><span>{SOURCE_LABELS[item.signal_source] ?? item.signal_source}</span><strong>{item.latest_count}</strong><small>{item.window_change_pct > 0 ? "+" : ""}{item.window_change_pct}% across window</small></div>)}</div></div><div><strong>Regional context</strong><dl className="context-list"><div><dt>Rainfall index</dt><dd>{investigation?.regional_context.average_rainfall_index ?? "—"}</dd></div><div><dt>Mobility index</dt><dd>{investigation?.regional_context.average_mobility_index ?? "—"}</dd></div><div><dt>Temperature</dt><dd>{investigation?.regional_context.average_temperature_c ?? "—"}°C</dd></div></dl></div><div><strong>Investigation findings</strong><ul className="finding-list">{investigation?.findings.map((item) => <li key={item}>{item}</li>)}</ul></div></div>
+        </section>
+        {responsePlan && <section className="card response-panel"><div className="panel-heading"><div><h2>Recommended response playbook</h2><p>Version {responsePlan.playbook_version} · Actions remain behind the human approval gate</p></div><span className={`level ${responsePlan.alert_level}`}>{levelLabel(responsePlan.alert_level)}</span></div><div className="response-grid"><div className="action-list">{responsePlan.actions.map((item) => <div className="response-action" key={`${item.category}-${item.action}`}><span>{item.category}</span><div><strong>{item.action}</strong><p>{item.owner} · {item.timeframe}</p></div>{item.requires_approval && <small>Approval required</small>}</div>)}</div><aside><strong>Condition guidance</strong>{responsePlan.condition_guidance.map((item) => <p key={item}>{item}</p>)}<div className="boundary-note">{responsePlan.boundary}</div></aside></div></section>}
         </>}
 
         <footer>Rules calculate alert levels · AI language support will summarize prepared evidence · Incident Commander retains approval authority</footer>

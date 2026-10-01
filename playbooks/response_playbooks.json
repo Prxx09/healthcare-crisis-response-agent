@@ -1,0 +1,25 @@
+{
+  "version": "1.0",
+  "levels": {
+    "monitor": [
+      {"category": "investigation", "action": "Verify feed completeness and recent reporting delays", "owner": "Surveillance analyst", "timeframe": "Within 1 business day", "requires_approval": false},
+      {"category": "monitoring", "action": "Continue daily review of all available signals", "owner": "Surveillance team", "timeframe": "Daily", "requires_approval": false}
+    ],
+    "investigate": [
+      {"category": "investigation", "action": "Validate the cluster with contributing facilities and laboratories", "owner": "Epidemiology lead", "timeframe": "Within 4 hours", "requires_approval": false},
+      {"category": "resources", "action": "Review near-term staffing, laboratory and pharmacy readiness", "owner": "Operations lead", "timeframe": "Within 8 hours", "requires_approval": true},
+      {"category": "communication", "action": "Prepare an internal situation summary for leadership", "owner": "Incident communications", "timeframe": "Within 8 hours", "requires_approval": true}
+    ],
+    "escalate": [
+      {"category": "coordination", "action": "Convene the incident assessment team", "owner": "Incident Commander", "timeframe": "Within 1 hour", "requires_approval": true},
+      {"category": "investigation", "action": "Initiate enhanced case and exposure investigation", "owner": "Epidemiology lead", "timeframe": "Within 2 hours", "requires_approval": true},
+      {"category": "resources", "action": "Activate priority staffing, laboratory and supply readiness checks", "owner": "Operations lead", "timeframe": "Within 2 hours", "requires_approval": true},
+      {"category": "communication", "action": "Prepare approved partner and public communication drafts", "owner": "Incident communications", "timeframe": "Within 4 hours", "requires_approval": true}
+    ]
+  },
+  "condition_guidance": {
+    "ili": ["Review respiratory testing demand and healthcare attendance pressure", "Check antiviral and respiratory-support supply indicators"],
+    "age": ["Review food, water and shared-location exposure reports", "Check hydration-treatment and diagnostic capacity"],
+    "dengue": ["Review rainfall and vector-activity context", "Check diagnostic, fluid-management and vector-control readiness"]
+  }
+}

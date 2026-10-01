@@ -56,3 +56,29 @@ export interface ForecastResponse {
   scenarios: ForecastScenario[];
   assumptions: string[];
 }
+export interface InvestigationResponse {
+  analysis_date: string;
+  window_start: string;
+  peak_date: string;
+  peak_total: number;
+  source_comparison: Array<{ signal_source: string; window_start_count: number; latest_count: number; window_change_pct: number }>;
+  data_quality: Record<string, number>;
+  regional_context: { average_rainfall_index: number | null; average_mobility_index: number | null; average_temperature_c: number | null };
+  findings: string[];
+}
+export interface ResponseAction {
+  category: string;
+  action: string;
+  owner: string;
+  timeframe: string;
+  requires_approval: boolean;
+}
+export interface ResponsePlan {
+  playbook_version: string;
+  condition_code: string;
+  alert_level: "monitor" | "investigate" | "escalate";
+  actions: ResponseAction[];
+  condition_guidance: string[];
+  approval_required: boolean;
+  boundary: string;
+}

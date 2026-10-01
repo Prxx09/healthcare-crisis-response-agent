@@ -1,3 +1,4 @@
+import asyncio
 from datetime import date, datetime, timedelta, timezone
 
 from fastapi import FastAPI, HTTPException, Query
@@ -6,7 +7,9 @@ import httpx
 
 from .config import get_settings
 from .forecast_engine import build_scenarios
+from .investigation_engine import investigate_cluster
 from .models import AlertDecisionRequest, AlertGenerationRequest
+from .playbook_engine import select_response_plan
 from .signal_engine import detect_source_signals, summarise_clusters
 from .supabase_client import SupabaseRepository
 
@@ -78,6 +81,38 @@ async def forecast(
         raise HTTPException(status_code=404, detail=str(error)) from error
     except httpx.HTTPError as error:
         raise HTTPException(status_code=502, detail="Unable to build forecast scenarios") from error
+
+
+@app.get("/api/v1/investigation")
+async def investigation(
+    analysis_date: date = Query(...),
+    region_code: str = Query(...),
+    condition_code: str = Query(...),
+    window_days: int = Query(default=14, ge=7, le=30),
+) -> dict:
+    start_date = analysis_date - timedelta(days=window_days - 1)
+    repository = SupabaseRepository()
+    try:
+        rows, context = await asyncio.gather(
+            repository.get_observations(start_date.isoformat(), analysis_date.isoformat(), region_code, condition_code),
+            repository.get_regional_context(start_date.isoformat(), analysis_date.isoformat(), region_code),
+        )
+        return investigate_cluster(rows, context, analysis_date)
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except httpx.HTTPError as error:
+        raise HTTPException(status_code=502, detail="Unable to investigate the selected cluster") from error
+
+
+@app.get("/api/v1/response-plan")
+async def response_plan(
+    condition_code: str = Query(...),
+    alert_level: str = Query(...),
+) -> dict:
+    try:
+        return select_response_plan(condition_code, alert_level)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
 
 
 @app.get("/api/v1/alerts")
