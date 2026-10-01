@@ -49,6 +49,8 @@ The briefing endpoint converts prepared evidence into a concise stakeholder summ
 
 The orchestration endpoint runs the complete surveillance workflow as one trace. It reports the status, duration, and bounded output of every component, marks dependent steps as blocked after an ingestion failure, and always records whether the Incident Commander gate is waiting or not required. It never issues response actions automatically.
 
+Approved alerts create an idempotent set of incident actions from the selected response playbook. Actions record the responsible role, optional assignee, timeframe, calculated due time, current status, and completion note. The action table is protected like the alert table and remains inaccessible to anonymous or authenticated browser clients.
+
 ## Import order after the Supabase project is created
 
 1. Run `supabase/schema.sql` in Supabase SQL Editor.

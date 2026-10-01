@@ -15,3 +15,9 @@ class AlertDecisionRequest(BaseModel):
     status: Literal["approved", "dismissed"]
     reviewer_name: str = Field(min_length=2, max_length=120)
     note: str | None = Field(default=None, max_length=500)
+
+
+class ActionUpdateRequest(BaseModel):
+    status: Literal["pending", "in_progress", "completed", "cancelled"]
+    assignee_name: str | None = Field(default=None, max_length=120)
+    note: str | None = Field(default=None, max_length=500)

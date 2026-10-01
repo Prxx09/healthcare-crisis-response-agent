@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Activity, AlertTriangle, CheckCircle2, Database, FileCheck2, RefreshCw, ShieldCheck, Sparkles, Upload, Workflow as WorkflowIcon, XCircle } from "lucide-react";
+import { Activity, AlertTriangle, CheckCircle2, Database, FileCheck2, ListChecks, RefreshCw, ShieldCheck, Sparkles, Upload, Workflow as WorkflowIcon, XCircle } from "lucide-react";
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api } from "./api";
-import type { AlertRecord, Cluster, Condition, EvidenceBriefing, ForecastResponse, InvestigationResponse, Observation, PlaybookLibrary, PlaybookValidation, Region, ResponsePlan, SignalResponse, WorkflowRun } from "./types";
+import type { AlertRecord, Cluster, Condition, EvidenceBriefing, ForecastResponse, IncidentAction, InvestigationResponse, Observation, PlaybookLibrary, PlaybookValidation, Region, ResponsePlan, SignalResponse, WorkflowRun } from "./types";
 
 const SOURCE_LABELS: Record<string, string> = { visits: "Visits", lab_positives: "Lab positives", pharmacy_demand: "Pharmacy demand" };
 
@@ -30,7 +30,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [view, setView] = useState<"dashboard" | "alerts" | "playbooks">("dashboard");
+  const [view, setView] = useState<"dashboard" | "alerts" | "actions" | "playbooks">("dashboard");
   const [alerts, setAlerts] = useState<AlertRecord[]>([]);
   const [reviewer, setReviewer] = useState("");
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
@@ -42,6 +42,10 @@ export default function App() {
   const [briefing, setBriefing] = useState<EvidenceBriefing | null>(null);
   const [briefingLoading, setBriefingLoading] = useState(false);
   const [workflow, setWorkflow] = useState<WorkflowRun | null>(null);
+  const [actions, setActions] = useState<IncidentAction[]>([]);
+  const [actionAssignee, setActionAssignee] = useState("");
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
     Promise.all([api.regions(), api.conditions()])
@@ -79,6 +83,13 @@ export default function App() {
     api.playbooks().then(setPlaybookLibrary).catch(() => setPlaybookMessage("The playbook service is unavailable."));
   }, [view]);
 
+  useEffect(() => {
+    if (view !== "actions") return;
+    setActionLoading(true);
+    setActionMessage(null);
+    api.actions().then(setActions).catch((reason: Error) => setActionMessage(reason.message)).finally(() => setActionLoading(false));
+  }, [view, refreshKey]);
+
   async function validatePlaybook(file: File | undefined) {
     if (!file) return;
     setPlaybookLoading(true);
@@ -98,6 +109,18 @@ export default function App() {
     try { setBriefing(await api.briefing(analysisDate, region, condition)); }
     catch { setError("The evidence briefing could not be generated."); }
     finally { setBriefingLoading(false); }
+  }
+
+  async function updateAction(id: number, status: IncidentAction["status"]) {
+    setActionLoading(true);
+    setActionMessage(null);
+    try {
+      const updated = await api.updateAction(id, status, actionAssignee.trim());
+      setActions((items) => items.map((item) => item.id === id ? { ...item, ...updated } : item));
+      setActionMessage(`Action marked ${status.replaceAll("_", " ")}.`);
+    } catch (reason) {
+      setActionMessage(reason instanceof Error ? reason.message : "Unable to update the action.");
+    } finally { setActionLoading(false); }
   }
 
   async function generateAlert() {
@@ -160,14 +183,14 @@ export default function App() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand"><ShieldCheck size={28} /><div><strong>CrisisWatch</strong><span>Public-health intelligence</span></div></div>
-        <nav><button className={view === "dashboard" ? "active" : ""} onClick={() => setView("dashboard")}><Activity size={18} /> Command dashboard</button><button className={view === "alerts" ? "active" : ""} onClick={() => setView("alerts")}><AlertTriangle size={18} /> Alert review</button><button className={view === "playbooks" ? "active" : ""} onClick={() => setView("playbooks")}><Database size={18} /> Playbook library</button></nav>
+        <nav><button className={view === "dashboard" ? "active" : ""} onClick={() => setView("dashboard")}><Activity size={18} /> Command dashboard</button><button className={view === "alerts" ? "active" : ""} onClick={() => setView("alerts")}><AlertTriangle size={18} /> Alert review</button><button className={view === "actions" ? "active" : ""} onClick={() => setView("actions")}><ListChecks size={18} /> Action tracker</button><button className={view === "playbooks" ? "active" : ""} onClick={() => setView("playbooks")}><Database size={18} /> Playbook library</button></nav>
         <div className="scope-note"><strong>Decision support only</strong><p>Synthetic aggregate data. Human approval is required before response actions are issued.</p></div>
       </aside>
 
       <main>
-        <header><div><p className="eyebrow">Healthcare Crisis Prediction and Response Agent</p><h1>{view === "dashboard" ? "Surveillance command dashboard" : view === "alerts" ? "Incident Commander alert review" : "Response playbook library"}</h1><p className="subtitle">{view === "dashboard" ? "Review signals, supporting evidence and escalation readiness." : view === "alerts" ? "Approve or dismiss corroborated alerts before any response action is issued." : "Validate operational guidance before it is considered for controlled activation."}</p></div><div className="system-status"><span></span> Data pipeline active</div></header>
+        <header><div><p className="eyebrow">Healthcare Crisis Prediction and Response Agent</p><h1>{view === "dashboard" ? "Surveillance command dashboard" : view === "alerts" ? "Incident Commander alert review" : view === "actions" ? "Incident action tracker" : "Response playbook library"}</h1><p className="subtitle">{view === "dashboard" ? "Review signals, supporting evidence and escalation readiness." : view === "alerts" ? "Approve or dismiss corroborated alerts before any response action is issued." : view === "actions" ? "Assign and track approved response tasks through completion." : "Validate operational guidance before it is considered for controlled activation."}</p></div><div className="system-status"><span></span> Data pipeline active</div></header>
 
-        {view === "playbooks" ? <section className="playbook-page">
+        {view === "actions" ? <section className="action-page"><div className="card action-toolbar"><label>Assign updates as<input value={actionAssignee} onChange={(event) => setActionAssignee(event.target.value)} placeholder="Team member or role" /></label><button onClick={() => setRefreshKey((value) => value + 1)} disabled={actionLoading}><RefreshCw size={16} /> Refresh actions</button></div>{actionMessage && <div className="notice-banner">{actionMessage}</div>}<div className="review-heading"><div><h2>Approved response actions</h2><p>Tasks are created only after Incident Commander approval.</p></div><span>{actions.filter((item) => item.status !== "completed" && item.status !== "cancelled").length} open</span></div>{actionLoading && actions.length === 0 ? <div className="card review-empty">Loading action tracker…</div> : actions.length === 0 ? <div className="card review-empty"><ListChecks size={36} /><strong>No response actions</strong><p>Approved alerts will create tasks from the selected playbook.</p></div> : <div className="action-tracker-list">{actions.map((item) => <article className="card tracked-action" key={item.id}><div className="tracked-heading"><span className={`task-status ${item.status}`}>{item.status.replaceAll("_", " ")}</span><div><strong>{item.action_text}</strong><p>{item.alerts.conditions.name} · {item.alerts.regions.name} · Alert #{item.alert_id}</p></div></div><div className="task-meta"><span><small>Owner</small>{item.owner_role}</span><span><small>Assignee</small>{item.assignee_name || "Unassigned"}</span><span><small>Timeframe</small>{item.timeframe}</span><span><small>Due</small>{item.due_at ? new Date(item.due_at).toLocaleString() : "Ongoing"}</span></div><div className="alert-actions">{item.status === "pending" && <button className="generate-button" onClick={() => updateAction(item.id, "in_progress")} disabled={actionLoading}>Start action</button>}{item.status === "in_progress" && <button className="approve-button" onClick={() => updateAction(item.id, "completed")} disabled={actionLoading}><CheckCircle2 size={16} /> Complete</button>}{item.status !== "completed" && item.status !== "cancelled" && <button className="dismiss" onClick={() => updateAction(item.id, "cancelled")} disabled={actionLoading}>Cancel</button>}</div></article>)}</div>}</section> : view === "playbooks" ? <section className="playbook-page">
           <div className="card playbook-overview"><div><span>Active playbook</span><strong>Version {playbookLibrary?.active_version ?? "—"}</strong><p>Current bounded response actions used by the recommendation engine.</p></div><div><span>Supported files</span><strong>{playbookLibrary?.supported_formats.map((item) => item.toUpperCase()).join(" · ") ?? "PDF · DOCX · YAML · JSON"}</strong><p>Maximum file size {playbookLibrary ? `${Math.round(playbookLibrary.max_file_bytes / 1024 / 1024)} MB` : "5 MB"}.</p></div></div>
           <div className="card upload-panel"><Upload size={30} /><div><h2>Validate a playbook</h2><p>The file is parsed and checked against the required response schema. It is not activated or stored.</p></div><label className="upload-button">{playbookLoading ? "Validating…" : "Choose file"}<input type="file" accept=".pdf,.docx,.yaml,.yml,.json" disabled={playbookLoading} onChange={(event) => validatePlaybook(event.target.files?.[0])} /></label></div>
           {playbookMessage && <div className="notice-banner">{playbookMessage}</div>}

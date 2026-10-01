@@ -7,9 +7,10 @@ import httpx
 
 from .config import get_settings
 from .briefing_engine import generate_briefing
+from .action_engine import action_rows
 from .forecast_engine import build_scenarios
 from .investigation_engine import investigate_cluster
-from .models import AlertDecisionRequest, AlertGenerationRequest
+from .models import ActionUpdateRequest, AlertDecisionRequest, AlertGenerationRequest
 from .playbook_documents import MAX_FILE_BYTES, SUPPORTED_EXTENSIONS, parse_playbook_document
 from .playbook_engine import select_response_plan
 from .orchestrator import run_workflow
@@ -193,6 +194,16 @@ async def alerts(status: str | None = Query(default="pending_approval")) -> list
         raise HTTPException(status_code=502, detail="Unable to read alerts") from error
 
 
+@app.get("/api/v1/actions")
+async def actions(status: str | None = None) -> list[dict]:
+    try:
+        return await SupabaseRepository().get_actions(status)
+    except RuntimeError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except httpx.HTTPError as error:
+        raise HTTPException(status_code=502, detail="Unable to read incident actions") from error
+
+
 @app.post("/api/v1/alerts/generate")
 async def generate_alerts(request: AlertGenerationRequest) -> dict:
     repository = SupabaseRepository()
@@ -227,17 +238,47 @@ async def generate_alerts(request: AlertGenerationRequest) -> dict:
 
 @app.patch("/api/v1/alerts/{alert_id}/decision")
 async def decide_alert(alert_id: int, request: AlertDecisionRequest) -> dict:
+    repository = SupabaseRepository()
     try:
-        result = await SupabaseRepository().decide_alert(alert_id, {
+        alert = await repository.get_alert(alert_id)
+        if not alert:
+            raise HTTPException(status_code=404, detail="Alert not found")
+        decision_time = datetime.now(timezone.utc)
+        result = await repository.decide_alert(alert_id, {
             "status": request.status,
             "reviewed_by": request.reviewer_name.strip(),
             "review_note": request.note.strip() if request.note else None,
-            "approved_at": datetime.now(timezone.utc).isoformat(),
+            "approved_at": decision_time.isoformat(),
         })
+        created_actions = []
+        if result and request.status == "approved":
+            plan = select_response_plan(alert["conditions"]["code"], alert["alert_level"])
+            created_actions = await repository.create_actions(action_rows(alert_id, plan["actions"], decision_time))
     except RuntimeError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
     except httpx.HTTPError as error:
         raise HTTPException(status_code=502, detail="Unable to record alert decision") from error
     if not result:
         raise HTTPException(status_code=409, detail="Alert is no longer pending review")
+    return {"alert": result[0], "actions_created": len(created_actions)}
+
+
+@app.patch("/api/v1/actions/{action_id}")
+async def update_action(action_id: int, request: ActionUpdateRequest) -> dict:
+    now = datetime.now(timezone.utc).isoformat()
+    payload = {
+        "status": request.status,
+        "assignee_name": request.assignee_name.strip() if request.assignee_name else None,
+        "completion_note": request.note.strip() if request.note else None,
+        "completed_at": now if request.status == "completed" else None,
+        "updated_at": now,
+    }
+    try:
+        result = await SupabaseRepository().update_action(action_id, payload)
+    except RuntimeError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except httpx.HTTPError as error:
+        raise HTTPException(status_code=502, detail="Unable to update incident action") from error
+    if not result:
+        raise HTTPException(status_code=404, detail="Incident action not found")
     return result[0]

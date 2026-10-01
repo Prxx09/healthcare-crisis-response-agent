@@ -1,4 +1,4 @@
-import type { AlertRecord, Condition, EvidenceBriefing, ForecastResponse, InvestigationResponse, Observation, PlaybookLibrary, PlaybookValidation, Region, ResponsePlan, SignalResponse, WorkflowRun } from "./types";
+import type { AlertRecord, Condition, EvidenceBriefing, ForecastResponse, IncidentAction, InvestigationResponse, Observation, PlaybookLibrary, PlaybookValidation, Region, ResponsePlan, SignalResponse, WorkflowRun } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
@@ -64,6 +64,7 @@ export const api = {
     return response.json() as Promise<PlaybookValidation>;
   },
   alerts: () => getJson<AlertRecord[]>("/api/v1/alerts?status=pending_approval"),
+  actions: () => getJson<IncidentAction[]>("/api/v1/actions"),
   generateAlerts: (analysisDate: string, regionCode: string, conditionCode: string) =>
     sendJson<{ analysis_date: string; eligible_clusters: number; created: number }>("/api/v1/alerts/generate", "POST", {
       analysis_date: analysisDate,
@@ -72,5 +73,7 @@ export const api = {
       condition_code: conditionCode,
     }),
   decideAlert: (id: number, status: "approved" | "dismissed", reviewerName: string, note?: string) =>
-    sendJson<AlertRecord>(`/api/v1/alerts/${id}/decision`, "PATCH", { status, reviewer_name: reviewerName, note: note || null }),
+    sendJson<{ alert: AlertRecord; actions_created: number }>(`/api/v1/alerts/${id}/decision`, "PATCH", { status, reviewer_name: reviewerName, note: note || null }),
+  updateAction: (id: number, status: IncidentAction["status"], assigneeName?: string, note?: string) =>
+    sendJson<IncidentAction>(`/api/v1/actions/${id}`, "PATCH", { status, assignee_name: assigneeName || null, note: note || null }),
 };

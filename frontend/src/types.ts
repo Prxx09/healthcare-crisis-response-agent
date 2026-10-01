@@ -122,3 +122,20 @@ export interface WorkflowRun {
   duration_ms: number;
   steps: WorkflowStep[];
 }
+export interface IncidentAction {
+  id: number;
+  alert_id: number;
+  action_key: string;
+  category: string;
+  action_text: string;
+  owner_role: string;
+  assignee_name: string | null;
+  timeframe: string;
+  due_at: string | null;
+  status: "pending" | "in_progress" | "completed" | "cancelled";
+  completion_note: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  alerts: { alert_level: "monitor" | "investigate" | "escalate"; analysis_date: string; regions: { code: string; name: string }; conditions: { code: string; name: string } };
+}
