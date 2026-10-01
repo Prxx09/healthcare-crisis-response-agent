@@ -47,6 +47,8 @@ The playbook validation endpoint accepts PDF, DOCX, YAML and JSON files up to 5 
 
 The briefing endpoint converts prepared evidence into a concise stakeholder summary. It works without credentials through a deterministic template. Optional Groq and Hugging Face providers use their OpenAI-compatible chat-completion endpoints and fall back safely if configuration or model output is invalid. The language model cannot change alert levels, evidence, playbooks, or approval decisions.
 
+The orchestration endpoint runs the complete surveillance workflow as one trace. It reports the status, duration, and bounded output of every component, marks dependent steps as blocked after an ingestion failure, and always records whether the Incident Commander gate is waiting or not required. It never issues response actions automatically.
+
 ## Import order after the Supabase project is created
 
 1. Run `supabase/schema.sql` in Supabase SQL Editor.

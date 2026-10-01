@@ -12,6 +12,7 @@ from .investigation_engine import investigate_cluster
 from .models import AlertDecisionRequest, AlertGenerationRequest
 from .playbook_documents import MAX_FILE_BYTES, SUPPORTED_EXTENSIONS, parse_playbook_document
 from .playbook_engine import select_response_plan
+from .orchestrator import run_workflow
 from .signal_engine import detect_source_signals, summarise_clusters
 from .supabase_client import SupabaseRepository
 
@@ -151,6 +152,15 @@ async def briefing(
         raise HTTPException(status_code=404, detail=str(error)) from error
     except httpx.HTTPError as error:
         raise HTTPException(status_code=502, detail="Unable to prepare briefing evidence") from error
+
+
+@app.get("/api/v1/workflow")
+async def workflow(
+    analysis_date: date = Query(...),
+    region_code: str = Query(...),
+    condition_code: str = Query(...),
+) -> dict:
+    return await run_workflow(SupabaseRepository(), settings, analysis_date, region_code, condition_code)
 
 
 @app.get("/api/v1/playbooks")

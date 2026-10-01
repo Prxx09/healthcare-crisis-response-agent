@@ -105,3 +105,20 @@ export interface EvidenceBriefing {
   disclaimer: string;
   fallback_reason?: string;
 }
+export interface WorkflowStep {
+  name: string;
+  component: string;
+  status: "completed" | "failed" | "blocked" | "skipped" | "waiting" | "not_required";
+  duration_ms: number;
+  output?: Record<string, unknown>;
+  message?: string;
+}
+export interface WorkflowRun {
+  workflow_id: string;
+  status: "completed" | "partial" | "failed" | "waiting_for_approval";
+  analysis_date: string;
+  region_code: string;
+  condition_code: string;
+  duration_ms: number;
+  steps: WorkflowStep[];
+}

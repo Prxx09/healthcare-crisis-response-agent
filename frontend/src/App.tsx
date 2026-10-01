@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Activity, AlertTriangle, CheckCircle2, Database, FileCheck2, RefreshCw, ShieldCheck, Sparkles, Upload, XCircle } from "lucide-react";
+import { Activity, AlertTriangle, CheckCircle2, Database, FileCheck2, RefreshCw, ShieldCheck, Sparkles, Upload, Workflow as WorkflowIcon, XCircle } from "lucide-react";
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api } from "./api";
-import type { AlertRecord, Cluster, Condition, EvidenceBriefing, ForecastResponse, InvestigationResponse, Observation, PlaybookLibrary, PlaybookValidation, Region, ResponsePlan, SignalResponse } from "./types";
+import type { AlertRecord, Cluster, Condition, EvidenceBriefing, ForecastResponse, InvestigationResponse, Observation, PlaybookLibrary, PlaybookValidation, Region, ResponsePlan, SignalResponse, WorkflowRun } from "./types";
 
 const SOURCE_LABELS: Record<string, string> = { visits: "Visits", lab_positives: "Lab positives", pharmacy_demand: "Pharmacy demand" };
 
@@ -41,6 +41,7 @@ export default function App() {
   const [playbookLoading, setPlaybookLoading] = useState(false);
   const [briefing, setBriefing] = useState<EvidenceBriefing | null>(null);
   const [briefingLoading, setBriefingLoading] = useState(false);
+  const [workflow, setWorkflow] = useState<WorkflowRun | null>(null);
 
   useEffect(() => {
     Promise.all([api.regions(), api.conditions()])
@@ -56,8 +57,9 @@ export default function App() {
       api.signals(analysisDate),
       api.forecast(analysisDate, region, condition),
       api.investigation(analysisDate, region, condition),
+      api.workflow(analysisDate, region, condition),
     ])
-      .then(([observationData, signalData, forecastData, investigationData]) => { setObservations(observationData); setSignals(signalData); setForecast(forecastData); setInvestigation(investigationData); })
+      .then(([observationData, signalData, forecastData, investigationData, workflowData]) => { setObservations(observationData); setSignals(signalData); setForecast(forecastData); setInvestigation(investigationData); setWorkflow(workflowData); })
       .catch(() => setError("The surveillance API is unavailable. Confirm that the FastAPI service is running."))
       .finally(() => setLoading(false));
   }, [analysisDate, condition, region, refreshKey]);
@@ -185,6 +187,8 @@ export default function App() {
         </section>
 
         {error && <div className="error-banner"><AlertTriangle size={18} />{error}</div>}
+
+        {workflow && <section className="card workflow-strip"><div className="workflow-title"><WorkflowIcon size={19} /><div><strong>Workflow trace</strong><span>{workflow.status.replaceAll("_", " ")} · {workflow.duration_ms} ms</span></div></div><div className="workflow-steps">{workflow.steps.map((step, index) => <div className={`workflow-step ${step.status}`} key={step.name}><span>{index + 1}</span><div><strong>{step.component}</strong><small>{step.status.replaceAll("_", " ")} · {step.duration_ms} ms</small></div></div>)}</div></section>}
 
         <section className="metrics">
           <article className="card metric"><span>Current status</span><strong className={`status-text ${activeLevel}`}>{selectedClusters.length === 0 ? "No active signal" : levelLabel(selectedClusters[0].level)}</strong><small>Selected region and condition</small></article>

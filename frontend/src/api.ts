@@ -1,4 +1,4 @@
-import type { AlertRecord, Condition, EvidenceBriefing, ForecastResponse, InvestigationResponse, Observation, PlaybookLibrary, PlaybookValidation, Region, ResponsePlan, SignalResponse } from "./types";
+import type { AlertRecord, Condition, EvidenceBriefing, ForecastResponse, InvestigationResponse, Observation, PlaybookLibrary, PlaybookValidation, Region, ResponsePlan, SignalResponse, WorkflowRun } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
@@ -44,6 +44,10 @@ export const api = {
   briefing: (analysisDate: string, region: string, condition: string) => {
     const query = new URLSearchParams({ analysis_date: analysisDate, region_code: region, condition_code: condition });
     return getJson<EvidenceBriefing>(`/api/v1/briefing?${query}`);
+  },
+  workflow: (analysisDate: string, region: string, condition: string) => {
+    const query = new URLSearchParams({ analysis_date: analysisDate, region_code: region, condition_code: condition });
+    return getJson<WorkflowRun>(`/api/v1/workflow?${query}`);
   },
   playbooks: () => getJson<PlaybookLibrary>("/api/v1/playbooks"),
   validatePlaybook: async (file: File) => {
