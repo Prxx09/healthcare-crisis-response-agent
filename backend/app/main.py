@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import httpx
 
 from .config import get_settings
+from .forecast_engine import build_scenarios
 from .models import AlertDecisionRequest, AlertGenerationRequest
 from .signal_engine import detect_source_signals, summarise_clusters
 from .supabase_client import SupabaseRepository
@@ -58,6 +59,25 @@ async def signals(analysis_date: date = Query(default=date(2026, 9, 30)), baseli
         "source_signal_count": len(source_signals),
         "clusters": summarise_clusters(source_signals),
     }
+
+
+@app.get("/api/v1/forecast")
+async def forecast(
+    analysis_date: date = Query(...),
+    region_code: str = Query(...),
+    condition_code: str = Query(...),
+    horizon_days: int = Query(default=7, ge=3, le=14),
+) -> dict:
+    start_date = analysis_date - timedelta(days=15)
+    try:
+        rows = await SupabaseRepository().get_observations(
+            start_date.isoformat(), analysis_date.isoformat(), region_code, condition_code
+        )
+        return build_scenarios(rows, analysis_date, horizon_days)
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except httpx.HTTPError as error:
+        raise HTTPException(status_code=502, detail="Unable to build forecast scenarios") from error
 
 
 @app.get("/api/v1/alerts")

@@ -1,4 +1,4 @@
-import type { AlertRecord, Condition, Observation, Region, SignalResponse } from "./types";
+import type { AlertRecord, Condition, ForecastResponse, Observation, Region, SignalResponse } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
@@ -29,6 +29,10 @@ export const api = {
     return getJson<Observation[]>(`/api/v1/observations?${query}`);
   },
   signals: (analysisDate: string) => getJson<SignalResponse>(`/api/v1/signals?analysis_date=${analysisDate}&baseline_days=28`),
+  forecast: (analysisDate: string, region: string, condition: string) => {
+    const query = new URLSearchParams({ analysis_date: analysisDate, region_code: region, condition_code: condition, horizon_days: "7" });
+    return getJson<ForecastResponse>(`/api/v1/forecast?${query}`);
+  },
   alerts: () => getJson<AlertRecord[]>("/api/v1/alerts?status=pending_approval"),
   generateAlerts: (analysisDate: string, regionCode: string, conditionCode: string) =>
     sendJson<{ analysis_date: string; eligible_clusters: number; created: number }>("/api/v1/alerts/generate", "POST", {

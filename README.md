@@ -37,6 +37,8 @@ npm run dev
 
 The dashboard expects the API at `http://localhost:8000` by default. Copy `frontend/.env.example` to `frontend/.env.local` to override it.
 
+The command dashboard includes a transparent seven-day scenario forecast for the selected region and condition. It compares the most recent seven days with the preceding seven days, then displays bounded best-case, expected, and worst-case visit trajectories. These scenarios are planning aids, not epidemiological predictions.
+
 ## Import order after the Supabase project is created
 
 1. Run `supabase/schema.sql` in Supabase SQL Editor.

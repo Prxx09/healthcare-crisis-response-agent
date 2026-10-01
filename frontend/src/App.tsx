@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Activity, AlertTriangle, CheckCircle2, Database, RefreshCw, ShieldCheck, XCircle } from "lucide-react";
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api } from "./api";
-import type { AlertRecord, Cluster, Condition, Observation, Region, SignalResponse } from "./types";
+import type { AlertRecord, Cluster, Condition, ForecastResponse, Observation, Region, SignalResponse } from "./types";
 
 const SOURCE_LABELS: Record<string, string> = { visits: "Visits", lab_positives: "Lab positives", pharmacy_demand: "Pharmacy demand" };
 
@@ -24,6 +24,7 @@ export default function App() {
   const [analysisDate, setAnalysisDate] = useState("2025-12-15");
   const [observations, setObservations] = useState<Observation[]>([]);
   const [signals, setSignals] = useState<SignalResponse | null>(null);
+  const [forecast, setForecast] = useState<ForecastResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -45,8 +46,9 @@ export default function App() {
     Promise.all([
       api.observations(isoDaysBefore(analysisDate, 28), analysisDate, region, condition),
       api.signals(analysisDate),
+      api.forecast(analysisDate, region, condition),
     ])
-      .then(([observationData, signalData]) => { setObservations(observationData); setSignals(signalData); })
+      .then(([observationData, signalData, forecastData]) => { setObservations(observationData); setSignals(signalData); setForecast(forecastData); })
       .catch(() => setError("The surveillance API is unavailable. Confirm that the FastAPI service is running."))
       .finally(() => setLoading(false));
   }, [analysisDate, condition, region, refreshKey]);
@@ -99,6 +101,16 @@ export default function App() {
   const selectedClusters = signals?.clusters.filter((item) => item.region_code === region && item.condition_code === condition) ?? [];
   const latestVisits = [...observations].reverse().find((item) => item.signal_source === "visits")?.observation_count ?? 0;
   const activeLevel = selectedClusters.length > 0 ? selectedClusters[0].level : "normal";
+  const forecastChartData = useMemo(() => {
+    if (!forecast) return [];
+    const rows = new Map<string, Record<string, string | number>>();
+    forecast.scenarios.forEach((scenario) => scenario.points.forEach((point) => {
+      const row = rows.get(point.date) ?? { date: point.date.slice(5) };
+      row[scenario.scenario] = point.projected_visits;
+      rows.set(point.date, row);
+    }));
+    return [...rows.values()];
+  }, [forecast]);
 
   return (
     <div className="app-shell">
@@ -142,6 +154,9 @@ export default function App() {
           <article className="card panel evidence-panel"><div className="panel-heading"><div><h2>Evidence review</h2><p>Transparent rule output for the selected date</p></div>{selectedClusters.some((item) => item.corroborated && item.level !== "monitor") && <button className="generate-button" onClick={generateAlert} disabled={alertLoading}>Send to review</button>}</div>
             {selectedClusters.length === 0 ? <div className="empty"><CheckCircle2 size={34} /><strong>No threshold crossed</strong><p>The current values remain within the configured review thresholds.</p></div> : selectedClusters.map((cluster) => <div className="cluster" key={`${cluster.region_code}-${cluster.condition_code}`}><div className="cluster-title"><span className={`level ${cluster.level}`}>{levelLabel(cluster.level)}</span><strong>{cluster.corroborated ? "Corroborated signal" : "Single-source signal"}</strong></div>{cluster.signals.map((signal) => <div className="signal-row" key={signal.signal_source}><span>{SOURCE_LABELS[signal.signal_source] ?? signal.signal_source}</span><strong>{signal.current_count}</strong><small>{signal.percent_change > 0 ? "+" : ""}{signal.percent_change}% vs baseline</small></div>)}</div>)}
           </article>
+        </section>
+        <section className="card panel forecast-panel"><div className="panel-heading"><div><h2>Seven-day planning scenarios</h2><p>Bounded projections based on recent visit activity—not an epidemiological prediction</p></div>{forecast && <span className="forecast-change">Weekly change {forecast.observed_weekly_change_pct > 0 ? "+" : ""}{forecast.observed_weekly_change_pct}%</span>}</div>
+          <div className="forecast-layout"><div className="forecast-chart"><ResponsiveContainer width="100%" height="100%"><LineChart data={forecastChartData}><CartesianGrid strokeDasharray="3 3" stroke="#e7edf3" /><XAxis dataKey="date" tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} /><Tooltip /><Legend /><Line type="monotone" dataKey="best_case" name="Best case" stroke="#2c9c83" strokeWidth={2} dot={false} /><Line type="monotone" dataKey="expected" name="Expected" stroke="#1261a0" strokeWidth={2.5} dot={false} /><Line type="monotone" dataKey="worst_case" name="Worst case" stroke="#cf573f" strokeWidth={2} dot={false} /></LineChart></ResponsiveContainer></div><div className="assumptions"><strong>Model assumptions</strong>{forecast?.assumptions.map((item) => <p key={item}>{item}</p>)}</div></div>
         </section>
         </>}
 

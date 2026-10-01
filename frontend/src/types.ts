@@ -42,3 +42,17 @@ export interface AlertRecord {
   regions: { code: string; name: string };
   conditions: { code: string; name: string };
 }
+export interface ForecastPoint { date: string; projected_visits: number }
+export interface ForecastScenario {
+  scenario: "best_case" | "expected" | "worst_case";
+  daily_change_pct: number;
+  points: ForecastPoint[];
+}
+export interface ForecastResponse {
+  analysis_date: string;
+  horizon_days: number;
+  latest_visits: number;
+  observed_weekly_change_pct: number;
+  scenarios: ForecastScenario[];
+  assumptions: string[];
+}
