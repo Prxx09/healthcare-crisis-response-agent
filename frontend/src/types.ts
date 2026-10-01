@@ -82,3 +82,14 @@ export interface ResponsePlan {
   approval_required: boolean;
   boundary: string;
 }
+export interface PlaybookLibrary {
+  active_version: string;
+  supported_formats: string[];
+  max_file_bytes: number;
+  validation_only: boolean;
+}
+export interface PlaybookValidation {
+  valid: boolean;
+  source: { filename: string; format: string; size_bytes: number; sha256: string };
+  summary: { version: string; conditions: string[]; action_counts: Record<string, number> };
+}

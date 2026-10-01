@@ -43,6 +43,8 @@ The investigation panel correlates surveillance sources across a fourteen-day re
 
 Versioned response playbooks are stored in `playbooks/response_playbooks.json`. The API selects bounded investigation, readiness, coordination, and communication actions by alert level and condition. Controlled actions remain subject to Incident Commander approval.
 
+The playbook validation endpoint accepts PDF, DOCX, YAML and JSON files up to 5 MB. It extracts and validates a normalized playbook, reports file metadata and action counts, and never replaces the active playbook automatically. See `playbooks/README.md` for the document markers and required schema.
+
 ## Import order after the Supabase project is created
 
 1. Run `supabase/schema.sql` in Supabase SQL Editor.

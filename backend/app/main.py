@@ -1,7 +1,7 @@
 import asyncio
 from datetime import date, datetime, timedelta, timezone
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
 
@@ -9,6 +9,7 @@ from .config import get_settings
 from .forecast_engine import build_scenarios
 from .investigation_engine import investigate_cluster
 from .models import AlertDecisionRequest, AlertGenerationRequest
+from .playbook_documents import MAX_FILE_BYTES, SUPPORTED_EXTENSIONS, parse_playbook_document
 from .playbook_engine import select_response_plan
 from .signal_engine import detect_source_signals, summarise_clusters
 from .supabase_client import SupabaseRepository
@@ -111,6 +112,26 @@ async def response_plan(
 ) -> dict:
     try:
         return select_response_plan(condition_code, alert_level)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@app.get("/api/v1/playbooks")
+async def playbooks() -> dict:
+    active = select_response_plan("ili", "monitor")
+    return {
+        "active_version": active["playbook_version"],
+        "supported_formats": sorted(extension.lstrip(".") for extension in SUPPORTED_EXTENSIONS),
+        "max_file_bytes": MAX_FILE_BYTES,
+        "validation_only": True,
+    }
+
+
+@app.post("/api/v1/playbooks/validate")
+async def validate_playbook(request: Request, filename: str = Query(..., min_length=1, max_length=180)) -> dict:
+    data = await request.body()
+    try:
+        return parse_playbook_document(filename, data)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 

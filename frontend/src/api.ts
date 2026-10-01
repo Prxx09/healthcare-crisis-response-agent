@@ -1,4 +1,4 @@
-import type { AlertRecord, Condition, ForecastResponse, InvestigationResponse, Observation, Region, ResponsePlan, SignalResponse } from "./types";
+import type { AlertRecord, Condition, ForecastResponse, InvestigationResponse, Observation, PlaybookLibrary, PlaybookValidation, Region, ResponsePlan, SignalResponse } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
@@ -40,6 +40,20 @@ export const api = {
   responsePlan: (condition: string, level: "monitor" | "investigate" | "escalate") => {
     const query = new URLSearchParams({ condition_code: condition, alert_level: level });
     return getJson<ResponsePlan>(`/api/v1/response-plan?${query}`);
+  },
+  playbooks: () => getJson<PlaybookLibrary>("/api/v1/playbooks"),
+  validatePlaybook: async (file: File) => {
+    const query = new URLSearchParams({ filename: file.name });
+    const response = await fetch(`${API_URL}/api/v1/playbooks/validate?${query}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/octet-stream" },
+      body: file,
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null);
+      throw new Error(payload?.detail ?? `Playbook validation failed (${response.status})`);
+    }
+    return response.json() as Promise<PlaybookValidation>;
   },
   alerts: () => getJson<AlertRecord[]>("/api/v1/alerts?status=pending_approval"),
   generateAlerts: (analysisDate: string, regionCode: string, conditionCode: string) =>
