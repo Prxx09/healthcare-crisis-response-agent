@@ -48,6 +48,7 @@ create table if not exists public.surveillance_observations (
 
 create table if not exists public.alerts (
   id bigint generated always as identity primary key,
+  analysis_date date,
   region_id bigint not null references public.regions(id) on delete restrict,
   condition_id bigint not null references public.conditions(id) on delete restrict,
   alert_level text not null check (alert_level in ('monitor', 'investigate', 'escalate')),
@@ -56,6 +57,8 @@ create table if not exists public.alerts (
   status text not null default 'pending_approval' check (status in ('pending_approval', 'approved', 'dismissed', 'closed')),
   approved_by uuid references auth.users(id) on delete set null,
   approved_at timestamptz,
+  reviewed_by text,
+  review_note text,
   created_at timestamptz not null default now(),
   check ((status in ('approved', 'dismissed', 'closed')) = (approved_at is not null) or status = 'pending_approval')
 );
@@ -74,6 +77,9 @@ create index if not exists alerts_condition_idx
   on public.alerts (condition_id);
 create index if not exists alerts_approved_by_idx
   on public.alerts (approved_by);
+create unique index if not exists alerts_analysis_scope_rule_idx
+  on public.alerts (analysis_date, region_id, condition_id, rule_version)
+  where analysis_date is not null;
 
 -- Tables remain unavailable through the public Data API until explicit role policies are added.
 -- The FastAPI backend is the first access path and keeps its service-role credential server-only.

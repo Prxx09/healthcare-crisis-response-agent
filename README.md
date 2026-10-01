@@ -52,4 +52,6 @@ The initial backend uses the Supabase publishable key for read-only access to sy
 - Region: `ap-south-1`
 - Project reference: `jinbmggobfeccvqrnnze`
 
-All five tables have Row Level Security enabled. Read-only policies expose only the four synthetic reference and surveillance tables. The `alerts` table remains unavailable to anonymous clients; its write policies will be added with the Incident Commander authentication workflow.
+All five tables have Row Level Security enabled. Read-only policies expose only the four synthetic reference and surveillance tables. The `alerts` table remains unavailable to anonymous clients; the FastAPI service reads and writes it with a server-only Supabase secret.
+
+To enable alert generation and Incident Commander decisions locally, add `SUPABASE_SECRET_KEY` to `backend/.env`. Obtain it from Supabase Project Settings → API Keys and never place it in frontend environment files or commit it to source control.

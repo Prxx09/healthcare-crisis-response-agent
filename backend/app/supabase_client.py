@@ -8,19 +8,49 @@ from .config import get_settings
 
 
 class SupabaseRepository:
-    """Small read-only client for the Supabase REST API."""
+    """Small REST client that keeps privileged alert operations server-side."""
 
     def __init__(self) -> None:
         settings = get_settings()
         self.base_url = f"{settings.supabase_url.rstrip('/')}/rest/v1"
-        self.headers = {
+        self.read_headers = {
             "apikey": settings.supabase_publishable_key,
             "Authorization": f"Bearer {settings.supabase_publishable_key}",
+        }
+        self.secret_key = settings.supabase_secret_key
+
+    def _write_headers(self) -> dict[str, str]:
+        if not self.secret_key:
+            raise RuntimeError("SUPABASE_SECRET_KEY is not configured on the API server")
+        return {
+            "apikey": self.secret_key,
+            "Authorization": f"Bearer {self.secret_key}",
+            "Content-Type": "application/json",
         }
 
     async def get(self, table: str, params: dict[str, str]) -> list[dict[str, Any]]:
         async with httpx.AsyncClient(timeout=20.0) as client:
-            response = await client.get(f"{self.base_url}/{table}", headers=self.headers, params=params)
+            response = await client.get(f"{self.base_url}/{table}", headers=self.read_headers, params=params)
+        response.raise_for_status()
+        return response.json()
+
+    async def privileged_get(self, table: str, params: dict[str, str]) -> list[dict[str, Any]]:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            response = await client.get(f"{self.base_url}/{table}", headers=self._write_headers(), params=params)
+        response.raise_for_status()
+        return response.json()
+
+    async def post(self, table: str, payload: dict[str, Any]) -> list[dict[str, Any]]:
+        headers = {**self._write_headers(), "Prefer": "return=representation,resolution=ignore-duplicates"}
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            response = await client.post(f"{self.base_url}/{table}", headers=headers, json=payload)
+        response.raise_for_status()
+        return response.json()
+
+    async def patch(self, table: str, filters: dict[str, str], payload: dict[str, Any]) -> list[dict[str, Any]]:
+        headers = {**self._write_headers(), "Prefer": "return=representation"}
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            response = await client.patch(f"{self.base_url}/{table}", headers=headers, params=filters, json=payload)
         response.raise_for_status()
         return response.json()
 
@@ -44,3 +74,18 @@ class SupabaseRepository:
         if condition_code:
             params["conditions.code"] = f"eq.{condition_code}"
         return await self.get("surveillance_observations", params)
+
+    async def get_alerts(self, status: str | None = None) -> list[dict[str, Any]]:
+        params = {
+            "select": "id,analysis_date,alert_level,evidence_summary,rule_version,status,reviewed_by,review_note,approved_at,created_at,regions!inner(code,name),conditions!inner(code,name)",
+            "order": "created_at.desc",
+        }
+        if status:
+            params["status"] = f"eq.{status}"
+        return await self.privileged_get("alerts", params)
+
+    async def create_alert(self, payload: dict[str, Any]) -> list[dict[str, Any]]:
+        return await self.post("alerts", payload)
+
+    async def decide_alert(self, alert_id: int, payload: dict[str, Any]) -> list[dict[str, Any]]:
+        return await self.patch("alerts", {"id": f"eq.{alert_id}", "status": "eq.pending_approval"}, payload)

@@ -28,3 +28,17 @@ export interface Cluster {
   signals: SourceSignal[];
 }
 export interface SignalResponse { analysis_date: string; baseline_days: number; source_signal_count: number; clusters: Cluster[] }
+export interface AlertRecord {
+  id: number;
+  analysis_date: string;
+  alert_level: "monitor" | "investigate" | "escalate";
+  evidence_summary: Cluster;
+  rule_version: string;
+  status: "pending_approval" | "approved" | "dismissed" | "closed";
+  reviewed_by: string | null;
+  review_note: string | null;
+  approved_at: string | null;
+  created_at: string;
+  regions: { code: string; name: string };
+  conditions: { code: string; name: string };
+}
