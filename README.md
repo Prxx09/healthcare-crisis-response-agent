@@ -16,6 +16,27 @@ python data/generate_synthetic_surveillance.py
 
 The generator is deterministic (`seed=42`), so the same input produces the same dataset.
 
+## Run the application locally
+
+Backend:
+
+```bash
+cd backend
+python -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/uvicorn app.main:app --reload
+```
+
+Dashboard:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The dashboard expects the API at `http://localhost:8000` by default. Copy `frontend/.env.example` to `frontend/.env.local` to override it.
+
 ## Import order after the Supabase project is created
 
 1. Run `supabase/schema.sql` in Supabase SQL Editor.
