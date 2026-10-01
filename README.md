@@ -1,73 +1,194 @@
-# Healthcare Crisis Prediction and Response Agent — Data Foundation
+# Healthcare Crisis Prediction and Response Agent
 
-This folder contains the first implementation assets for the project:
+A public-health decision-support application that monitors synthetic surveillance feeds, detects unusual disease activity, investigates corroborating evidence, forecasts short-term planning scenarios, and prepares bounded response actions for human approval.
 
-- `data/generate_synthetic_surveillance.py` generates one year of synthetic, aggregated surveillance data.
-- `data/output/` is created by the generator and contains CSV files ready for import.
-- `supabase/schema.sql` creates the Supabase tables, constraints, indexes, and baseline RLS configuration.
+The project uses synthetic, aggregated data only. It is not a diagnostic system and does not declare real outbreaks.
 
-The dataset contains no patient-level records or real clinical data. It is designed for the three selected conditions: influenza-like illness (ILI), acute gastroenteritis (AGE), and dengue.
+## Project scope
 
-## Generate the dataset
+The current implementation covers three conditions selected for shared data structure and manageable surveillance complexity:
 
-```bash
-python data/generate_synthetic_surveillance.py
+| Condition | Primary signals | Context |
+|---|---|---|
+| Influenza-like illness (ILI) | Visits, laboratory positives, pharmacy demand | Mobility and temperature |
+| Acute gastroenteritis (AGE) | Visits, laboratory positives, pharmacy demand | Shared-location and regional context |
+| Dengue | Suspected visits, laboratory positives, demand indicators | Rainfall and temperature |
+
+The system monitors four simulated districts from 1 October 2025 through 30 September 2026.
+
+## Workflow
+
+```mermaid
+flowchart TD
+    A["Synthetic surveillance feeds"] --> B["Ingestion Agent"]
+    B --> C["Signal Agent"]
+    C --> D["Investigation Agent"]
+    D --> E["Forecast Agent"]
+    E --> F["Response Agent"]
+    F --> G["Evidence Briefing"]
+    G --> H{"Incident Commander Gate"}
+    H -->|Approve| I["Tracked response actions"]
+    H -->|Dismiss| J["Decision recorded"]
+    I --> K["Timeline and PDF report"]
 ```
 
-The generator is deterministic (`seed=42`), so the same input produces the same dataset.
+Every execution returns a trace with component status and timing. Controlled response actions are never issued automatically.
 
-## Run the application locally
+## Main capabilities
 
-Backend:
+- Multi-source surveillance for visits, laboratory positives, pharmacy demand, and regional context.
+- Transparent baseline anomaly detection by region, condition, source, and date.
+- Cluster investigation with source correlation, peak activity, data quality, rainfall, mobility, and temperature.
+- Seven-day best-case, expected, and worst-case planning scenarios.
+- Versioned response playbooks with owners, timeframes, approval requirements, and condition guidance.
+- PDF, DOCX, YAML, and JSON playbook validation.
+- Deterministic evidence briefings with optional Groq or Hugging Face generation.
+- Incident Commander approval and dismissal workflow.
+- Assigned action tracking with due dates and completion state.
+- Chronological incident timeline and downloadable PDF situation report.
 
-```bash
-cd backend
-python -m venv .venv
-.venv/bin/pip install -r requirements.txt
-.venv/bin/uvicorn app.main:app --reload
+## Technology stack
+
+| Layer | Technology |
+|---|---|
+| Dashboard | React, TypeScript, Vite, Recharts, Lucide |
+| API | FastAPI, Pydantic, HTTPX |
+| Database | Supabase Postgres; SQLite-compatible local design boundary |
+| AI summaries | Deterministic fallback, optional Groq or Hugging Face |
+| Playbooks | JSON, YAML, PDF, DOCX |
+| Reports | ReportLab PDF generation |
+| Local workflow | Python virtual environment, npm, Make, shell scripts |
+
+Docker is not required. The project runs directly with a Python virtual environment and the Vite development server.
+
+## Repository structure
+
+```text
+backend/app/       FastAPI routes and workflow components
+frontend/src/      React command dashboard
+data/              Deterministic synthetic-data generator
+playbooks/         Active response playbook and format guidance
+supabase/          Schema, policies, seed data, and migrations
+scripts/           Local setup and development commands
+DATASET_GUIDE.md   Dataset coverage and design notes
 ```
 
-Dashboard:
+## Quick start
+
+Requirements:
+
+- Python 3.11 or newer
+- Node.js 20 or newer
+- npm
+- Make and Bash
+
+Install all dependencies:
 
 ```bash
-cd frontend
-npm install
-npm run dev
+make setup
 ```
 
-The dashboard expects the API at `http://localhost:8000` by default. Copy `frontend/.env.example` to `frontend/.env.local` to override it.
+Configure `backend/.env` using `backend/.env.example`. The final credential checklist is below.
 
-The command dashboard includes a transparent seven-day scenario forecast for the selected region and condition. It compares the most recent seven days with the preceding seven days, then displays bounded best-case, expected, and worst-case visit trajectories. These scenarios are planning aids, not epidemiological predictions.
+Start the API and dashboard together:
 
-The investigation panel correlates surveillance sources across a fourteen-day review window, identifies peak activity, summarizes data quality, and adds regional rainfall, mobility, and temperature context. Regional indicators are presented as context only and are not treated as causal evidence.
+```bash
+make dev
+```
 
-Versioned response playbooks are stored in `playbooks/response_playbooks.json`. The API selects bounded investigation, readiness, coordination, and communication actions by alert level and condition. Controlled actions remain subject to Incident Commander approval.
+Open:
 
-The playbook validation endpoint accepts PDF, DOCX, YAML and JSON files up to 5 MB. It extracts and validates a normalized playbook, reports file metadata and action counts, and never replaces the active playbook automatically. See `playbooks/README.md` for the document markers and required schema.
+- Dashboard: `http://127.0.0.1:5173`
+- API documentation: `http://127.0.0.1:8000/docs`
+- Health check: `http://127.0.0.1:8000/health`
 
-The briefing endpoint converts prepared evidence into a concise stakeholder summary. It works without credentials through a deterministic template. Optional Groq and Hugging Face providers use their OpenAI-compatible chat-completion endpoints and fall back safely if configuration or model output is invalid. The language model cannot change alert levels, evidence, playbooks, or approval decisions.
+Individual services can be started with `make api` and `make web`.
 
-The orchestration endpoint runs the complete surveillance workflow as one trace. It reports the status, duration, and bounded output of every component, marks dependent steps as blocked after an ingestion failure, and always records whether the Incident Commander gate is waiting or not required. It never issues response actions automatically.
+## Useful commands
 
-Approved alerts create an idempotent set of incident actions from the selected response playbook. Actions record the responsible role, optional assignee, timeframe, calculated due time, current status, and completion note. The action table is protected like the alert table and remains inaccessible to anonymous or authenticated browser clients.
+```bash
+make setup   # Install pinned Python and frontend dependencies
+make dev     # Run API and dashboard without Docker
+make check   # Compile the backend and build the frontend
+make data    # Regenerate deterministic synthetic CSV files
+```
 
-Each alert also exposes a chronological incident timeline derived from its creation, decision, and action updates. A downloadable PDF situation report presents the alert scope, evidence, decision record, and action status in a stakeholder-ready layout.
+## Demonstration scenarios
 
-## Import order after the Supabase project is created
+Use these dates in the dashboard to demonstrate known synthetic patterns:
 
-1. Run `supabase/schema.sql` in Supabase SQL Editor.
-2. Import `regions.csv` and `conditions.csv`.
-3. Import `regional_context.csv`.
-4. Import `surveillance_observations.csv`.
+| Date | Scope | Expected behavior |
+|---|---|---|
+| 10 November 2025 | Lakeside District / AGE | Corroborated investigation signal |
+| 15 December 2025 | Central District / ILI | Corroborated investigation signal |
+| 15 December 2025 | East District / Dengue | Corroborated investigation signal |
+| 30 September 2026 | Central District / ILI | No active threshold signal |
 
-The initial backend uses the Supabase publishable key for read-only access to synthetic aggregate surveillance tables. Alert decisions and future write operations remain protected and will require authenticated, role-specific policies.
+## API overview
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/v1/regions` | Available regions |
+| `GET /api/v1/conditions` | Monitored conditions |
+| `GET /api/v1/observations` | Filtered aggregate surveillance observations |
+| `GET /api/v1/signals` | Rule-based signal and cluster output |
+| `GET /api/v1/investigation` | Correlated cluster evidence |
+| `GET /api/v1/forecast` | Seven-day planning scenarios |
+| `GET /api/v1/response-plan` | Bounded playbook actions |
+| `GET /api/v1/briefing` | Stakeholder evidence briefing |
+| `GET /api/v1/workflow` | Complete workflow trace |
+| `GET /api/v1/alerts` | Protected approval queue |
+| `POST /api/v1/alerts/generate` | Create eligible alerts idempotently |
+| `PATCH /api/v1/alerts/{id}/decision` | Approve or dismiss an alert |
+| `GET /api/v1/actions` | Protected incident actions |
+| `PATCH /api/v1/actions/{id}` | Assign or update an action |
+| `GET /api/v1/incidents/{id}/timeline` | Incident audit timeline |
+| `GET /api/v1/incidents/{id}/report.pdf` | Downloadable situation report |
+| `POST /api/v1/playbooks/validate` | Validate an uploaded playbook |
+
+Interactive request and response schemas are available through FastAPI at `/docs`.
+
+## Data and security boundaries
+
+- No patient-level data, names, clinical records, or real health events are stored.
+- Public browser access is read-only and limited to synthetic reference and surveillance tables.
+- Alerts and incident actions have RLS enabled and no anonymous or authenticated policies.
+- The Supabase secret key is used only by FastAPI and must never be placed in frontend files.
+- AI providers receive prepared aggregate evidence only and cannot change alert levels or decisions.
+- Groq and Hugging Face failures return a deterministic evidence summary.
+- PDF and DOCX playbooks require an embedded structured section and are validated before use.
+- Human approval is required before controlled response tasks are created.
 
 ## Supabase project
 
-- Project: `healthcare-crisis-response-agent`
+- Project name: `healthcare-crisis-response-agent`
 - Region: `ap-south-1`
 - Project reference: `jinbmggobfeccvqrnnze`
 
-All five tables have Row Level Security enabled. Read-only policies expose only the four synthetic reference and surveillance tables. The `alerts` table remains unavailable to anonymous clients; the FastAPI service reads and writes it with a server-only Supabase secret.
+The database currently contains four simulated regions, three monitored conditions, 11,680 surveillance observations, and 1,460 regional-context records. Schema changes are tracked in `supabase/migrations/`.
 
-To enable alert generation and Incident Commander decisions locally, add `SUPABASE_SECRET_KEY` to `backend/.env`. Obtain it from Supabase Project Settings → API Keys and never place it in frontend environment files or commit it to source control.
+## Final environment configuration
+
+Backend variables:
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `SUPABASE_URL` | Yes | Supabase project API URL |
+| `SUPABASE_PUBLISHABLE_KEY` | Yes | Read-only synthetic surveillance access |
+| `SUPABASE_SECRET_KEY` | For protected workflows | Server-only alert, action, timeline, and report access |
+| `ALLOWED_ORIGINS` | Yes | Dashboard origins allowed by CORS |
+| `AI_PROVIDER` | No | `deterministic`, `groq`, or `huggingface` |
+| `GROQ_API_KEY` and `GROQ_MODEL` | When using Groq | Groq summary generation |
+| `HUGGINGFACE_TOKEN` and `HUGGINGFACE_MODEL` | When using Hugging Face | Hugging Face summary generation |
+
+Frontend variables:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `VITE_API_URL` | `http://localhost:8000` | FastAPI base URL |
+
+Never use `VITE_` variables for Supabase secret or AI-provider credentials; Vite exposes them to the browser.
+
+## Important limitation
+
+This repository demonstrates surveillance, investigation, coordination, and human-gated response using synthetic data. Its outputs must not be used for diagnosis, clinical decisions, public warnings, or declarations of real disease outbreaks.
