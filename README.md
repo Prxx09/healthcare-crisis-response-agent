@@ -57,7 +57,7 @@ Every execution returns a trace with component status and timing. Controlled res
 | AI summaries | Deterministic fallback, optional Groq or Hugging Face |
 | Playbooks | JSON, YAML, PDF, DOCX |
 | Reports | ReportLab PDF generation |
-| Local workflow | Python virtual environment, npm, Make, shell scripts |
+| Local workflow | Python virtual environment, npm, Make, Bash scripts, PowerShell scripts |
 
 Docker is not required. The project runs directly with a Python virtual environment and the Vite development server.
 
@@ -80,20 +80,32 @@ Requirements:
 - Python 3.11 or newer
 - Node.js 20 or newer
 - npm
-- Make and Bash
+- Make and Bash on Linux/macOS, or PowerShell on Windows
 
-Install all dependencies:
+Install all dependencies on Linux/macOS:
 
 ```bash
 make setup
 ```
 
+Install all dependencies on Windows PowerShell:
+
+```powershell
+.\scripts\setup.ps1
+```
+
 Configure `backend/.env` using `backend/.env.example`. The final credential checklist is below.
 
-Start the API and dashboard together:
+Start the API and dashboard together on Linux/macOS:
 
 ```bash
 make dev
+```
+
+Start the API and dashboard together on Windows PowerShell:
+
+```powershell
+.\scripts\dev.ps1
 ```
 
 Open:
@@ -102,7 +114,17 @@ Open:
 - API documentation: `http://127.0.0.1:8000/docs`
 - Health check: `http://127.0.0.1:8000/health`
 
-Individual services can be started with `make api` and `make web`.
+Individual services can be started with `make api` and `make web` on Linux/macOS. On Windows, you can also run the backend from the repository root:
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --app-dir backend
+```
+
+Then run the frontend in a second PowerShell window:
+
+```powershell
+npm run dev --prefix frontend
+```
 
 ## Useful commands
 
@@ -111,6 +133,15 @@ make setup   # Install pinned Python and frontend dependencies
 make dev     # Run API and dashboard without Docker
 make check   # Compile the backend and build the frontend
 make data    # Regenerate deterministic synthetic CSV files
+```
+
+Windows PowerShell equivalents:
+
+```powershell
+.\scripts\setup.ps1
+.\scripts\dev.ps1
+.\scripts\check.ps1
+.\.venv\Scripts\python.exe data\generate_synthetic_surveillance.py
 ```
 
 ## Demonstration scenarios
@@ -178,8 +209,8 @@ Backend variables:
 | `SUPABASE_SECRET_KEY` | For protected workflows | Server-only alert, action, timeline, and report access |
 | `ALLOWED_ORIGINS` | Yes | Dashboard origins allowed by CORS |
 | `AI_PROVIDER` | No | `deterministic`, `groq`, or `huggingface` |
-| `GROQ_API_KEY` and `GROQ_MODEL` | When using Groq | Groq summary generation |
-| `HUGGINGFACE_TOKEN` and `HUGGINGFACE_MODEL` | When using Hugging Face | Hugging Face summary generation |
+| `GROQ_API_KEY` and `GROQ_MODEL` | When using Groq | Groq summary generation. Recommended model: `llama-3.1-8b-instant` |
+| `HUGGINGFACE_TOKEN` and `HUGGINGFACE_MODEL` | When using Hugging Face | Hugging Face summary generation. Recommended model: `openai/gpt-oss-20b` |
 
 Frontend variables:
 
