@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     huggingface_token: str | None = None
     huggingface_model: str | None = None
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(env_file=(".env", "backend/.env"), env_file_encoding="utf-8", extra="ignore")
 
     @property
     def origins(self) -> list[str]:
