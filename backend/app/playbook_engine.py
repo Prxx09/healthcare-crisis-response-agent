@@ -20,7 +20,9 @@ def select_response_plan(condition_code: str, level: str) -> dict[str, Any]:
         raise ValueError("Unsupported alert level")
     if condition_code not in playbooks["condition_guidance"]:
         raise ValueError("Unsupported condition")
-    actions = playbooks["levels"][level]
+    common_actions = playbooks["levels"][level]
+    condition_actions = playbooks.get("condition_actions", {}).get(condition_code, {}).get(level, [])
+    actions = [*common_actions, *condition_actions]
     return {
         "playbook_version": playbooks["version"],
         "condition_code": condition_code,
