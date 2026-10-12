@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Activity, AlertTriangle, CheckCircle2, Clock3, Database, Download, FileCheck2, ListChecks, Mail, RefreshCw, ShieldCheck, Sparkles, Upload, Workflow as WorkflowIcon, XCircle } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Activity, AlertTriangle, CheckCircle2, Clock3, Database, Download, FileCheck2, ListChecks, LoaderCircle, Mail, RefreshCw, ShieldCheck, Sparkles, Upload, Workflow as WorkflowIcon, XCircle } from "lucide-react";
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api } from "./api";
 import { EmailAlertsPage } from "./EmailAlertsPage";
@@ -7,6 +7,7 @@ import { NotificationBanner } from "./NotificationBanner";
 import type { AlertRecord, Cluster, Condition, EvidenceBriefing, ForecastBriefing, ForecastResponse, IncidentAction, IncidentTimeline, InvestigationResponse, Observation, PlaybookLibrary, PlaybookValidation, Region, ResponsePlan, SignalResponse, WorkflowRun } from "./types";
 
 const SOURCE_LABELS: Record<string, string> = { visits: "Visits", lab_positives: "Lab positives", pharmacy_demand: "Pharmacy demand" };
+function ProgressIcon() { return <LoaderCircle className="progress-spinner" size={15} aria-hidden="true" />; }
 type View = "dashboard" | "alerts" | "actions" | "playbooks" | "emails";
 const PAGE_PATHS: Record<View, string> = {
   dashboard: "/command-dashboard",
@@ -80,6 +81,9 @@ export default function App() {
   const [playbookLoading, setPlaybookLoading] = useState(false);
   const [briefing, setBriefing] = useState<EvidenceBriefing | null>(null);
   const [briefingLoading, setBriefingLoading] = useState(false);
+  const [briefingOpen, setBriefingOpen] = useState(false);
+  const [briefingError, setBriefingError] = useState<string | null>(null);
+  const briefingRequestRef = useRef(0);
   const [workflow, setWorkflow] = useState<WorkflowRun | null>(null);
   const [actions, setActions] = useState<IncidentAction[]>([]);
   const [actionAssignee, setActionAssignee] = useState("");
@@ -110,6 +114,10 @@ export default function App() {
   useEffect(() => {
     setLoading(true);
     setError(null);
+    briefingRequestRef.current += 1;
+    setBriefing(null);
+    setBriefingOpen(false);
+    setBriefingError(null);
     setForecastBriefing(null);
     setForecastBriefingError(null);
     Promise.all([
@@ -160,9 +168,17 @@ export default function App() {
   }
 
   async function generateBriefing() {
+    const requestId = ++briefingRequestRef.current;
     setBriefingLoading(true);
-    try { setBriefing(await api.briefing(analysisDate, region, condition)); }
-    catch { setError("The evidence briefing could not be generated."); }
+    setBriefingError(null);
+    try {
+      const result = await api.briefing(analysisDate, region, condition);
+      if (requestId !== briefingRequestRef.current) return;
+      setBriefing(result);
+      setBriefingOpen(true);
+    } catch {
+      if (requestId === briefingRequestRef.current) setBriefingError("The evidence briefing could not be generated.");
+    }
     finally { setBriefingLoading(false); }
   }
 
@@ -326,10 +342,10 @@ export default function App() {
           <label>Region<select value={region} onChange={(event) => setRegion(event.target.value)}>{regions.map((item) => <option key={item.code} value={item.code}>{item.name}</option>)}</select></label>
           <label>Condition<select value={condition} onChange={(event) => setCondition(event.target.value)}>{conditions.map((item) => <option key={item.code} value={item.code}>{item.name}</option>)}</select></label>
           <label>Analysis date<input type="date" min="2025-10-29" max="2026-09-30" value={analysisDate} onChange={(event) => { if (isValidIsoDate(event.target.value)) setAnalysisDate(event.target.value); }} /></label>
-          <button onClick={() => setRefreshKey((value) => value + 1)}><RefreshCw size={16} /> Refresh</button>
+          <button onClick={() => setRefreshKey((value) => value + 1)} disabled={loading}>{loading ? <ProgressIcon /> : <RefreshCw size={16} />} {loading ? "Refreshing..." : "Refresh"}</button>
         </section>
 
-          <NotificationBanner message={error} onDismiss={() => setError(null)} variant="error" durationMs={0} />
+        <NotificationBanner message={error} onDismiss={() => setError(null)} variant="error" durationMs={8000} />
         <NotificationBanner message={alertMessage} onDismiss={() => setAlertMessage(null)} className="dashboard-notice" />
 
         {workflow && <section className="card workflow-strip"><div className="workflow-title"><WorkflowIcon size={19} /><div><strong>Workflow trace</strong><span>{workflow.status.replaceAll("_", " ")} · {workflow.duration_ms} ms</span></div></div><div className="workflow-steps">{workflow.steps.map((step, index) => <div className={`workflow-step ${step.status}`} key={step.name}><span>{index + 1}</span><div><strong>{step.component}</strong><small>{step.status.replaceAll("_", " ")} · {step.duration_ms} ms</small></div></div>)}</div></section>}
@@ -354,7 +370,7 @@ export default function App() {
               <div className="forecast-chart-card"><div className="forecast-chart-label"><strong>Projected visits by scenario</strong><span>Day 0 through day {forecast.horizon_days}</span></div><div className="forecast-chart" role="img" aria-label={`Seven-day visit forecast for ${conditions.find((item) => item.code === condition)?.name ?? condition} in ${regions.find((item) => item.code === region)?.name ?? region}. Expected day-seven visits: ${forecastSummary.expectedEnd.toLocaleString()}.`}><ResponsiveContainer width="100%" height="100%"><LineChart data={forecastChartData}><CartesianGrid strokeDasharray="3 3" stroke="#e7edf3" /><XAxis dataKey="date" tick={{ fontSize: 12 }} /><YAxis tick={{ fontSize: 12 }} /><Tooltip /><Legend /><Line type="monotone" dataKey="best_case" name="Best case" stroke="#2c9c83" strokeWidth={2.5} dot={false} /><Line type="monotone" dataKey="expected" name="Expected" stroke="#1261a0" strokeWidth={3} dot={false} /><Line type="monotone" dataKey="worst_case" name="Upper stress" stroke="#cf573f" strokeWidth={2.5} dot={false} /></LineChart></ResponsiveContainer></div></div>
               <div className="scenario-cards">{(["best_case", "expected", "worst_case"] as const).map((name) => { const scenario = forecastSummary.scenarios[name]; const finalValue = scenario.points.at(-1)?.projected_visits ?? forecast.latest_visits; return <article className={`scenario-card ${name}`} key={name}><div><span>{name === "best_case" ? "Best case" : name === "expected" ? "Expected" : "Upper stress"}</span><strong>{scenario.daily_change_pct >= 0 ? "+" : ""}{scenario.daily_change_pct}% daily</strong></div><p>{finalValue.toLocaleString()} visits on day 7</p></article>; })}<div className="forecast-boundary"><strong>Planning boundary</strong><p>These are bounded demand scenarios—not outbreak probability or an epidemiological prediction.</p></div></div>
             </div>
-            <NotificationBanner message={forecastBriefingError} onDismiss={() => setForecastBriefingError(null)} variant="error" durationMs={0} />
+            <NotificationBanner message={forecastBriefingError} onDismiss={() => setForecastBriefingError(null)} variant="error" durationMs={8000} />
             {forecastBriefing && <div className="forecast-briefing"><div className="forecast-briefing-title"><Sparkles size={19} /><div><span>AI interpretation · {forecastBriefing.provider}{forecastBriefing.model ? ` · ${forecastBriefing.model}` : ""}</span><strong>{forecastBriefing.headline}</strong></div></div><p>{forecastBriefing.outlook}</p><ul>{forecastBriefing.key_points.map((item) => <li key={item}>{item}</li>)}</ul><div className="forecast-planning-note"><strong>Planning note</strong><p>{forecastBriefing.planning_note}</p></div><small>{forecastBriefing.uncertainty} {forecastBriefing.disclaimer}</small>{forecastBriefing.fallback_reason && <span className="fallback-note">Fallback used: {forecastBriefing.fallback_reason}</span>}</div>}
             <details className="forecast-assumptions"><summary>Method and assumptions</summary>{forecast.assumptions.map((item) => <p key={item}>{item}</p>)}</details>
           </> : <div className="forecast-loading">{loading ? "Preparing forecast scenarios…" : "Forecast data is unavailable for this selection."}</div>}
@@ -366,10 +382,22 @@ export default function App() {
           </article>
 
           <article className="card panel evidence-panel"><div className="panel-heading"><div><h2>Evidence review</h2><p>Transparent rule output for the selected date</p></div><div className="evidence-actions"><button className="briefing-button" onClick={generateBriefing} disabled={briefingLoading}><Sparkles size={13} /> {briefingLoading ? "Preparing…" : "Prepare briefing"}</button>{selectedClusters.some((item) => item.corroborated && item.level !== "monitor") && <button className="generate-button" onClick={generateAlert} disabled={alertLoading}>Send to review</button>}</div></div>
-            {selectedClusters.length === 0 ? <div className="empty"><CheckCircle2 size={34} /><strong>No threshold crossed</strong><p>The current values remain within the configured review thresholds.</p></div> : selectedClusters.map((cluster) => <div className="cluster" key={`${cluster.region_code}-${cluster.condition_code}`}><div className="cluster-title"><span className={`level ${cluster.level}`}>{levelLabel(cluster.level)}</span><strong>{cluster.corroborated ? "Corroborated signal" : "Single-source signal"}</strong></div>{cluster.signals.map((signal) => <div className="signal-row" key={signal.signal_source}><span>{SOURCE_LABELS[signal.signal_source] ?? signal.signal_source}</span><strong>{signal.current_count}</strong><small>{signal.percent_change > 0 ? "+" : ""}{signal.percent_change}% vs baseline</small></div>)}</div>)}
+             {selectedClusters.length === 0 ? <div className="empty"><CheckCircle2 size={34} /><strong>No threshold crossed</strong><p>The current values remain within the configured review thresholds.</p></div> : selectedClusters.map((cluster) => <div className="cluster" key={`${cluster.region_code}-${cluster.condition_code}`}><div className="cluster-title"><span className={`level ${cluster.level}`}>{levelLabel(cluster.level)}</span><strong>{cluster.corroborated ? "Corroborated signal" : "Single-source signal"}</strong></div>{cluster.signals.map((signal) => <div className="signal-row" key={signal.signal_source}><span>{SOURCE_LABELS[signal.signal_source] ?? signal.signal_source}</span><strong>{signal.current_count}</strong><small>{signal.percent_change > 0 ? "+" : ""}{signal.percent_change}% vs baseline</small></div>)}</div>)}
+             {(briefing || briefingLoading || briefingError) && <details className="briefing-dropdown" open={briefingOpen} onToggle={(event) => setBriefingOpen(event.currentTarget.open)}>
+               <summary><span><Sparkles size={16} /> AI briefing</span><small>{briefingLoading ? "Preparing evidence summary..." : briefing ? "Generated for the current selection" : "Unable to generate briefing"}</small></summary>
+               {briefingLoading && <div className="briefing-inline-loading">Preparing the evidence briefing...</div>}
+               {briefingError && <div className="briefing-inline-error">{briefingError}</div>}
+               {briefing && <div className="briefing-inline-content"><div className="briefing-header"><Sparkles size={20} /><div><span>AI interpretation · {briefing.provider}{briefing.model ? ` · ${briefing.model}` : ""}</span><h2>{briefing.headline}</h2></div></div><p className="briefing-situation">{briefing.situation}</p><div className="briefing-columns"><div><strong>Supporting evidence</strong><ul>{briefing.evidence.map((item) => <li key={item}>{item}</li>)}</ul></div><div><strong>Uncertainties</strong><ul>{briefing.uncertainties.map((item) => <li key={item}>{item}</li>)}</ul></div></div><div className="review-callout"><strong>Recommended review</strong><p>{briefing.recommended_review}</p></div>{briefing.fallback_reason && <p className="fallback-note">Fallback used: {briefing.fallback_reason}</p>}<small>{briefing.disclaimer}</small></div>}
+             </details>}
           </article>
-        </section>
-        <section className="card investigation-panel"><div className="panel-heading"><div><h2>Cluster investigation</h2><p>Fourteen-day evidence correlation for the selected scope</p></div>{investigation && <span className="forecast-change">Peak {formatDate(investigation.peak_date)}</span>}</div>
+         </section>
+         {(briefing || briefingLoading || briefingError) && <details className="briefing-dropdown briefing-dropdown-wide" open={briefingOpen} onToggle={(event) => setBriefingOpen(event.currentTarget.open)}>
+           <summary><span><Sparkles size={16} /> AI briefing</span><small>{briefingLoading ? "Preparing evidence summary..." : briefing ? "Generated for the current selection" : "Unable to generate briefing"}</small></summary>
+           {briefingLoading && <div className="briefing-inline-loading">Preparing the evidence briefing...</div>}
+           {briefingError && <div className="briefing-inline-error">{briefingError}</div>}
+           {briefing && <div className="briefing-inline-content"><div className="briefing-header"><Sparkles size={20} /><div><span>AI interpretation · {briefing.provider}{briefing.model ? ` · ${briefing.model}` : ""}</span><h2>{briefing.headline}</h2></div></div><p className="briefing-situation">{briefing.situation}</p><div className="briefing-columns"><div><strong>Supporting evidence</strong><ul>{briefing.evidence.map((item) => <li key={item}>{item}</li>)}</ul></div><div><strong>Uncertainties</strong><ul>{briefing.uncertainties.map((item) => <li key={item}>{item}</li>)}</ul></div></div><div className="review-callout"><strong>Recommended review</strong><p>{briefing.recommended_review}</p></div>{briefing.fallback_reason && <p className="fallback-note">Fallback used: {briefing.fallback_reason}</p>}<small>{briefing.disclaimer}</small></div>}
+         </details>}
+         <section className="card investigation-panel"><div className="panel-heading"><div><h2>Cluster investigation</h2><p>Fourteen-day evidence correlation for the selected scope</p></div>{investigation && <span className="forecast-change">Peak {formatDate(investigation.peak_date)}</span>}</div>
           <div className="investigation-grid"><div><strong>Source comparison</strong><div className="source-cards">{investigation?.source_comparison.map((item) => <div key={item.signal_source}><span>{SOURCE_LABELS[item.signal_source] ?? item.signal_source}</span><strong>{item.latest_count}</strong><small>{item.window_change_pct > 0 ? "+" : ""}{item.window_change_pct}% across window</small></div>)}</div></div><div><strong>Regional context</strong><dl className="context-list"><div><dt>Rainfall index</dt><dd>{investigation?.regional_context.average_rainfall_index ?? "—"}</dd></div><div><dt>Mobility index</dt><dd>{investigation?.regional_context.average_mobility_index ?? "—"}</dd></div><div><dt>Temperature</dt><dd>{investigation?.regional_context.average_temperature_c ?? "—"}°C</dd></div></dl></div><div><strong>Investigation findings</strong><ul className="finding-list">{investigation?.findings.map((item) => <li key={item}>{item}</li>)}</ul></div></div>
         </section>
         {responsePlan && <section className="card response-panel"><div className="panel-heading"><div><h2>Recommended response playbook</h2><p>Version {responsePlan.playbook_version} · Actions remain behind the human approval gate</p></div><span className={`level ${responsePlan.alert_level}`}>{levelLabel(responsePlan.alert_level)}</span></div><div className="response-grid"><div className="action-list">{responsePlan.actions.map((item) => <div className="response-action" key={`${item.category}-${item.action}`}><span>{item.category}</span><div><strong>{item.action}</strong><p>{item.owner} · {item.timeframe}</p></div>{item.requires_approval && <small>Approval required</small>}</div>)}</div><aside><strong>Condition guidance</strong>{responsePlan.condition_guidance.map((item) => <p key={item}>{item}</p>)}<div className="boundary-note">{responsePlan.boundary}</div></aside></div></section>}
