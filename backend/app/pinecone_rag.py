@@ -21,7 +21,7 @@ def build_playbook_documents(playbooks: dict[str, Any] | None = None) -> list[di
             documents.append({
                 "id": f"{version}|{level}|action|{index}",
                 "text": (
-                    f"Approved response playbook version {version}. Alert level: {level}. "
+                    f"Approved response playbook version {version}. Shared action for alert level: {level}. "
                     f"Category: {action['category']}. Action: {action['action']}. "
                     f"Owner: {action['owner']}. Timeframe: {action['timeframe']}. "
                     f"Approval required: {'yes' if action['requires_approval'] else 'no'}."
@@ -34,6 +34,27 @@ def build_playbook_documents(playbooks: dict[str, Any] | None = None) -> list[di
                     "requires_approval": bool(action["requires_approval"]),
                 },
             })
+    for condition_code, level_map in source.get("condition_actions", {}).items():
+        for level, actions in level_map.items():
+            for index, action in enumerate(actions):
+                documents.append({
+                    "id": f"{version}|{condition_code}|{level}|action|{index}",
+                    "text": (
+                        f"Approved response playbook version {version}. Condition: {condition_code}. "
+                        f"Alert level: {level}. Category: {action['category']}. "
+                        f"Action: {action['action']}. Owner: {action['owner']}. "
+                        f"Timeframe: {action['timeframe']}. "
+                        f"Approval required: {'yes' if action['requires_approval'] else 'no'}."
+                    ),
+                    "metadata": {
+                        "playbook_version": version,
+                        "condition_code": condition_code,
+                        "alert_level": level,
+                        "content_type": "condition_action",
+                        "category": str(action["category"]),
+                        "requires_approval": bool(action["requires_approval"]),
+                    },
+                })
     for condition_code, guidance in source["condition_guidance"].items():
         for index, item in enumerate(guidance):
             documents.append({
