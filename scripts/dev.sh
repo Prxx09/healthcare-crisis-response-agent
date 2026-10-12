@@ -27,11 +27,17 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-(cd backend && ../.venv/bin/uvicorn app.main:app --reload) &
+backend_port="${BACKEND_PORT:-8001}"
+if [[ "$backend_port" != "8001" && "$backend_port" != "8002" ]]; then
+  echo "BACKEND_PORT must be 8001 or 8002." >&2
+  exit 1
+fi
+
+(cd backend && ../.venv/bin/uvicorn app.main:app --reload --host 127.0.0.1 --port "$backend_port") &
 api_pid=$!
 npm run dev --prefix frontend -- --host 127.0.0.1 &
 web_pid=$!
 
-echo "API:       http://127.0.0.1:8000"
+echo "API:       http://127.0.0.1:$backend_port"
 echo "Dashboard: http://127.0.0.1:5173"
 wait -n "$api_pid" "$web_pid"

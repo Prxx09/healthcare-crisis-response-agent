@@ -15,10 +15,15 @@ if (-not (Test-Path ".\backend\.env")) {
     Write-Error "backend\.env is missing. Copy backend\.env.example and add the required values."
 }
 
-Write-Host "API:       http://127.0.0.1:8000"
+$BackendPort = if ($env:BACKEND_PORT) { $env:BACKEND_PORT } else { "8001" }
+if ($BackendPort -notin @("8001", "8002")) {
+    Write-Error "BACKEND_PORT must be 8001 or 8002."
+}
+
+Write-Host "API:       http://127.0.0.1:$BackendPort"
 Write-Host "Dashboard: http://127.0.0.1:5173"
 
-$Api = Start-Process -FilePath ".\.venv\Scripts\python.exe" -ArgumentList "-m", "uvicorn", "app.main:app", "--reload", "--app-dir", "backend" -NoNewWindow -PassThru
+$Api = Start-Process -FilePath ".\.venv\Scripts\python.exe" -ArgumentList "-m", "uvicorn", "app.main:app", "--reload", "--host", "127.0.0.1", "--port", $BackendPort, "--app-dir", "backend" -NoNewWindow -PassThru
 try {
     npm run dev --prefix frontend -- --host 127.0.0.1
 }

@@ -2,6 +2,8 @@
 
 The active playbook is `response_playbooks.json`. The validation API accepts JSON, YAML, DOCX and PDF files up to 5 MB. Validation does not activate or overwrite a playbook.
 
+The active package supports optional disease-specific actions through `condition_actions[condition_code][alert_level]`. When present, these actions override the generic `levels` actions for plan generation and Pinecone indexing.
+
 JSON and YAML files must use the same fields as the active playbook. DOCX and PDF files may contain normal human-readable guidance, but must also include a JSON or YAML section between these markers:
 
 ```text

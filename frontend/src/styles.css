@@ -174,8 +174,8 @@ button:disabled { cursor: not-allowed; }
 .evidence-actions { justify-content: flex-end; flex-wrap: wrap; }
 .evidence-actions button { min-width: 132px; }
 .content-grid .panel { min-height: 0; }
-.response-action { grid-template-columns: 132px minmax(0, 1fr) max-content; }
-.response-action > span { white-space: normal; line-height: 1.2; }
+.response-action { grid-template-columns: minmax(150px, max-content) minmax(0, 1fr) max-content; }
+.response-action > span { min-width: 0; white-space: nowrap; line-height: 1.2; }
 .response-action small { white-space: nowrap; text-align: right; }
 .forecast-change { white-space: nowrap; }
 .workflow-strip { display: none; }

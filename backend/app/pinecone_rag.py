@@ -16,41 +16,63 @@ def build_playbook_documents(playbooks: dict[str, Any] | None = None) -> list[di
     source = playbooks or load_playbooks()
     version = str(source["version"])
     documents: list[dict[str, Any]] = []
-    for level, actions in source["levels"].items():
-        for index, action in enumerate(actions):
-            documents.append({
-                "id": f"{version}|{level}|action|{index}",
-                "text": (
-                    f"Approved response playbook version {version}. Shared action for alert level: {level}. "
-                    f"Category: {action['category']}. Action: {action['action']}. "
-                    f"Owner: {action['owner']}. Timeframe: {action['timeframe']}. "
-                    f"Approval required: {'yes' if action['requires_approval'] else 'no'}."
-                ),
-                "metadata": {
-                    "playbook_version": version,
-                    "alert_level": level,
-                    "content_type": "action",
-                    "category": str(action["category"]),
-                    "requires_approval": bool(action["requires_approval"]),
-                },
-            })
-    for condition_code, level_map in source.get("condition_actions", {}).items():
-        for level, actions in level_map.items():
+    condition_actions = source.get("condition_actions")
+    if condition_actions:
+        # Keep the package's generic level actions indexed as reference/fallback
+        # documents, while disease-specific records remain the retrieval target.
+        for level, actions in source["levels"].items():
             for index, action in enumerate(actions):
                 documents.append({
-                    "id": f"{version}|{condition_code}|{level}|action|{index}",
+                    "id": f"{version}|generic|{level}|action|{index}",
                     "text": (
-                        f"Approved response playbook version {version}. Condition: {condition_code}. "
-                        f"Alert level: {level}. Category: {action['category']}. "
-                        f"Action: {action['action']}. Owner: {action['owner']}. "
-                        f"Timeframe: {action['timeframe']}. "
+                        f"Approved response playbook version {version}. Generic alert level: {level}. "
+                        f"Category: {action['category']}. Action: {action['action']}. "
+                        f"Owner: {action['owner']}. Timeframe: {action['timeframe']}. "
                         f"Approval required: {'yes' if action['requires_approval'] else 'no'}."
                     ),
                     "metadata": {
                         "playbook_version": version,
-                        "condition_code": condition_code,
                         "alert_level": level,
-                        "content_type": "condition_action",
+                        "content_type": "generic_action",
+                        "category": str(action["category"]),
+                        "requires_approval": bool(action["requires_approval"]),
+                    },
+                })
+        for condition_code, levels in condition_actions.items():
+            for level, actions in levels.items():
+                for index, action in enumerate(actions):
+                    documents.append({
+                        "id": f"{version}|{condition_code}|{level}|action|{index}",
+                        "text": (
+                            f"Approved response playbook version {version}. Condition: {condition_code}. "
+                            f"Alert level: {level}. Category: {action['category']}. Action: {action['action']}. "
+                            f"Owner: {action['owner']}. Timeframe: {action['timeframe']}. "
+                            f"Approval required: {'yes' if action['requires_approval'] else 'no'}."
+                        ),
+                        "metadata": {
+                            "playbook_version": version,
+                            "condition_code": condition_code,
+                            "alert_level": level,
+                            "content_type": "action",
+                            "category": str(action["category"]),
+                            "requires_approval": bool(action["requires_approval"]),
+                        },
+                    })
+    else:
+        for level, actions in source["levels"].items():
+            for index, action in enumerate(actions):
+                documents.append({
+                    "id": f"{version}|{level}|action|{index}",
+                    "text": (
+                        f"Approved response playbook version {version}. Alert level: {level}. "
+                        f"Category: {action['category']}. Action: {action['action']}. "
+                        f"Owner: {action['owner']}. Timeframe: {action['timeframe']}. "
+                        f"Approval required: {'yes' if action['requires_approval'] else 'no'}."
+                    ),
+                    "metadata": {
+                        "playbook_version": version,
+                        "alert_level": level,
+                        "content_type": "action",
                         "category": str(action["category"]),
                         "requires_approval": bool(action["requires_approval"]),
                     },
@@ -119,12 +141,22 @@ def _retrieve_sync(settings: Settings, condition_code: str, alert_level: str, qu
         parameters={"input_type": "query", "truncate": "END"},
     )
     index = _index(settings, client)
+    playbooks = load_playbooks()
+    metadata_filter: dict[str, Any] = {"playbook_version": str(playbooks["version"])}
+    if playbooks.get("condition_actions"):
+        metadata_filter = {
+            "$and": [
+                {"playbook_version": str(playbooks["version"])},
+                {"condition_code": condition_code},
+                {"alert_level": alert_level},
+            ]
+        }
     result = index.query(
         vector=_embedding_values(embeddings),
         top_k=max(1, min(settings.pinecone_top_k, 20)),
         include_metadata=True,
         namespace=settings.pinecone_namespace,
-        filter={"playbook_version": str(load_playbooks()["version"])},
+        filter=metadata_filter,
     )
     matches = getattr(result, "matches", None)
     if matches is None and isinstance(result, dict):

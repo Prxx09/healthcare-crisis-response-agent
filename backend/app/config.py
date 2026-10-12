@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     supabase_url: str
     supabase_publishable_key: str
     supabase_secret_key: str | None = None
-    allowed_origins: str = "http://localhost:5173"
+    allowed_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     ai_provider: str = "deterministic"
     groq_api_key: str | None = None
     groq_model: str | None = None

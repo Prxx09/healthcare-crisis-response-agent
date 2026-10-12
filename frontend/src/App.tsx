@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Activity, AlertTriangle, CheckCircle2, Clock3, Database, Download, FileCheck2, ListChecks, LoaderCircle, Mail, RefreshCw, ShieldCheck, Sparkles, Upload, Workflow as WorkflowIcon, XCircle } from "lucide-react";
+import { Activity, AlertTriangle, CheckCircle2, Clock3, Database, Download, FileCheck2, ListChecks, Mail, RefreshCw, ShieldCheck, Sparkles, Upload, Workflow as WorkflowIcon, XCircle } from "lucide-react";
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api } from "./api";
 import { EmailAlertsPage } from "./EmailAlertsPage";
@@ -7,7 +7,6 @@ import { NotificationBanner } from "./NotificationBanner";
 import type { AlertRecord, Cluster, Condition, EvidenceBriefing, ForecastBriefing, ForecastResponse, IncidentAction, IncidentTimeline, InvestigationResponse, Observation, PlaybookLibrary, PlaybookValidation, Region, ResponsePlan, SignalResponse, WorkflowRun } from "./types";
 
 const SOURCE_LABELS: Record<string, string> = { visits: "Visits", lab_positives: "Lab positives", pharmacy_demand: "Pharmacy demand" };
-function ProgressIcon() { return <LoaderCircle className="progress-spinner" size={15} aria-hidden="true" />; }
 type View = "dashboard" | "alerts" | "actions" | "playbooks" | "emails";
 const PAGE_PATHS: Record<View, string> = {
   dashboard: "/command-dashboard",
@@ -342,7 +341,7 @@ export default function App() {
           <label>Region<select value={region} onChange={(event) => setRegion(event.target.value)}>{regions.map((item) => <option key={item.code} value={item.code}>{item.name}</option>)}</select></label>
           <label>Condition<select value={condition} onChange={(event) => setCondition(event.target.value)}>{conditions.map((item) => <option key={item.code} value={item.code}>{item.name}</option>)}</select></label>
           <label>Analysis date<input type="date" min="2025-10-29" max="2026-09-30" value={analysisDate} onChange={(event) => { if (isValidIsoDate(event.target.value)) setAnalysisDate(event.target.value); }} /></label>
-          <button onClick={() => setRefreshKey((value) => value + 1)} disabled={loading}>{loading ? <ProgressIcon /> : <RefreshCw size={16} />} {loading ? "Refreshing..." : "Refresh"}</button>
+          <button onClick={() => setRefreshKey((value) => value + 1)} disabled={loading}><RefreshCw size={16} /> {loading ? "Refreshing..." : "Refresh"}</button>
         </section>
 
         <NotificationBanner message={error} onDismiss={() => setError(null)} variant="error" durationMs={8000} />

@@ -2,74 +2,281 @@
   "version": "1.0",
   "levels": {
     "monitor": [
-      {"category": "investigation", "action": "Verify feed completeness and recent reporting delays", "owner": "Surveillance analyst", "timeframe": "Within 1 business day", "requires_approval": false},
-      {"category": "monitoring", "action": "Continue daily review of all available signals", "owner": "Surveillance team", "timeframe": "Daily", "requires_approval": false}
+      {
+        "category": "investigation",
+        "action": "Verify feed completeness and recent reporting delays",
+        "owner": "Surveillance analyst",
+        "timeframe": "Within 1 business day",
+        "requires_approval": false
+      },
+      {
+        "category": "monitoring",
+        "action": "Continue daily review of all available signals",
+        "owner": "Surveillance team",
+        "timeframe": "Daily",
+        "requires_approval": false
+      }
     ],
     "investigate": [
-      {"category": "investigation", "action": "Validate the cluster with contributing facilities and laboratories", "owner": "Epidemiology lead", "timeframe": "Within 4 hours", "requires_approval": false},
-      {"category": "resources", "action": "Review near-term staffing, laboratory and pharmacy readiness", "owner": "Operations lead", "timeframe": "Within 8 hours", "requires_approval": true},
-      {"category": "communication", "action": "Prepare an internal situation summary for leadership", "owner": "Incident communications", "timeframe": "Within 8 hours", "requires_approval": true}
+      {
+        "category": "investigation",
+        "action": "Validate the cluster with contributing facilities and laboratories",
+        "owner": "Epidemiology lead",
+        "timeframe": "Within 4 hours",
+        "requires_approval": false
+      },
+      {
+        "category": "resources",
+        "action": "Review near-term staffing, laboratory and pharmacy readiness",
+        "owner": "Operations lead",
+        "timeframe": "Within 8 hours",
+        "requires_approval": true
+      },
+      {
+        "category": "communication",
+        "action": "Prepare an internal situation summary for leadership",
+        "owner": "Incident communications",
+        "timeframe": "Within 8 hours",
+        "requires_approval": true
+      }
     ],
     "escalate": [
-      {"category": "coordination", "action": "Convene the incident assessment team", "owner": "Incident Commander", "timeframe": "Within 1 hour", "requires_approval": true},
-      {"category": "investigation", "action": "Initiate enhanced case and exposure investigation", "owner": "Epidemiology lead", "timeframe": "Within 2 hours", "requires_approval": true},
-      {"category": "resources", "action": "Activate priority staffing, laboratory and supply readiness checks", "owner": "Operations lead", "timeframe": "Within 2 hours", "requires_approval": true},
-      {"category": "communication", "action": "Prepare approved partner and public communication drafts", "owner": "Incident communications", "timeframe": "Within 4 hours", "requires_approval": true}
+      {
+        "category": "coordination",
+        "action": "Convene the incident assessment team",
+        "owner": "Incident Commander",
+        "timeframe": "Within 1 hour",
+        "requires_approval": true
+      },
+      {
+        "category": "investigation",
+        "action": "Initiate enhanced case and exposure investigation",
+        "owner": "Epidemiology lead",
+        "timeframe": "Within 2 hours",
+        "requires_approval": true
+      },
+      {
+        "category": "resources",
+        "action": "Activate priority staffing, laboratory and supply readiness checks",
+        "owner": "Operations lead",
+        "timeframe": "Within 2 hours",
+        "requires_approval": true
+      },
+      {
+        "category": "communication",
+        "action": "Prepare approved partner and public communication drafts",
+        "owner": "Incident communications",
+        "timeframe": "Within 4 hours",
+        "requires_approval": true
+      }
     ]
   },
   "condition_actions": {
     "ili": {
       "monitor": [
-        {"category": "surveillance", "action": "Review respiratory visit trends across facilities reporting ILI-like symptoms", "owner": "Surveillance analyst", "timeframe": "Within 1 business day", "requires_approval": false},
-        {"category": "laboratory", "action": "Check recent respiratory test positivity and pending test volume", "owner": "Laboratory liaison", "timeframe": "Within 1 business day", "requires_approval": false}
+        {
+          "category": "surveillance",
+          "action": "Review respiratory visit trends across facilities reporting ILI-like symptoms",
+          "owner": "Surveillance analyst",
+          "timeframe": "Within 1 business day",
+          "requires_approval": false
+        },
+        {
+          "category": "laboratory",
+          "action": "Check recent respiratory test positivity and pending test volume",
+          "owner": "Laboratory liaison",
+          "timeframe": "Within 1 business day",
+          "requires_approval": false
+        }
       ],
       "investigate": [
-        {"category": "facility_coordination", "action": "Ask high-volume facilities to confirm triage load and respiratory isolation readiness", "owner": "Operations lead", "timeframe": "Within 6 hours", "requires_approval": true},
-        {"category": "pharmacy", "action": "Review antiviral, fever-management and respiratory-support supply indicators", "owner": "Pharmacy coordinator", "timeframe": "Within 8 hours", "requires_approval": true},
-        {"category": "communication", "action": "Prepare internal respiratory-syndrome awareness guidance for clinical teams", "owner": "Incident communications", "timeframe": "Within 8 hours", "requires_approval": true}
+        {
+          "category": "facility_coordination",
+          "action": "Ask high-volume facilities to confirm triage load and respiratory isolation readiness",
+          "owner": "Operations lead",
+          "timeframe": "Within 6 hours",
+          "requires_approval": true
+        },
+        {
+          "category": "pharmacy",
+          "action": "Review antiviral, fever-management and respiratory-support supply indicators",
+          "owner": "Pharmacy coordinator",
+          "timeframe": "Within 8 hours",
+          "requires_approval": true
+        },
+        {
+          "category": "communication",
+          "action": "Prepare internal respiratory-syndrome awareness guidance for clinical teams",
+          "owner": "Incident communications",
+          "timeframe": "Within 8 hours",
+          "requires_approval": true
+        }
       ],
       "escalate": [
-        {"category": "clinical_readiness", "action": "Activate respiratory surge readiness checks for triage, isolation space and staffing", "owner": "Operations lead", "timeframe": "Within 2 hours", "requires_approval": true},
-        {"category": "laboratory", "action": "Prioritize respiratory specimen routing and turnaround-time tracking", "owner": "Laboratory liaison", "timeframe": "Within 2 hours", "requires_approval": true},
-        {"category": "communication", "action": "Draft approved respiratory-risk update for partner coordination channels", "owner": "Incident communications", "timeframe": "Within 4 hours", "requires_approval": true}
+        {
+          "category": "clinical_readiness",
+          "action": "Activate respiratory surge readiness checks for triage, isolation space and staffing",
+          "owner": "Operations lead",
+          "timeframe": "Within 2 hours",
+          "requires_approval": true
+        },
+        {
+          "category": "laboratory",
+          "action": "Prioritize respiratory specimen routing and turnaround-time tracking",
+          "owner": "Laboratory liaison",
+          "timeframe": "Within 2 hours",
+          "requires_approval": true
+        },
+        {
+          "category": "communication",
+          "action": "Draft approved respiratory-risk update for partner coordination channels",
+          "owner": "Incident communications",
+          "timeframe": "Within 4 hours",
+          "requires_approval": true
+        }
       ]
     },
     "age": {
       "monitor": [
-        {"category": "surveillance", "action": "Review gastroenteritis visits for shared-location or facility-level concentration", "owner": "Surveillance analyst", "timeframe": "Within 1 business day", "requires_approval": false},
-        {"category": "data_quality", "action": "Confirm emergency visit and laboratory feeds are complete for AGE-related symptoms", "owner": "Data operations", "timeframe": "Within 1 business day", "requires_approval": false}
+        {
+          "category": "surveillance",
+          "action": "Review gastroenteritis visits for shared-location or facility-level concentration",
+          "owner": "Surveillance analyst",
+          "timeframe": "Within 1 business day",
+          "requires_approval": false
+        },
+        {
+          "category": "data_quality",
+          "action": "Confirm emergency visit and laboratory feeds are complete for AGE-related symptoms",
+          "owner": "Data operations",
+          "timeframe": "Within 1 business day",
+          "requires_approval": false
+        }
       ],
       "investigate": [
-        {"category": "exposure_review", "action": "Check available reports for common food, water or shared-location exposure patterns", "owner": "Epidemiology lead", "timeframe": "Within 4 hours", "requires_approval": false},
-        {"category": "laboratory", "action": "Review stool-test demand, positivity and diagnostic capacity indicators", "owner": "Laboratory liaison", "timeframe": "Within 8 hours", "requires_approval": true},
-        {"category": "resources", "action": "Confirm hydration-treatment and rehydration-supply readiness", "owner": "Operations lead", "timeframe": "Within 8 hours", "requires_approval": true}
+        {
+          "category": "exposure_review",
+          "action": "Check available reports for common food, water or shared-location exposure patterns",
+          "owner": "Epidemiology lead",
+          "timeframe": "Within 4 hours",
+          "requires_approval": false
+        },
+        {
+          "category": "laboratory",
+          "action": "Review stool-test demand, positivity and diagnostic capacity indicators",
+          "owner": "Laboratory liaison",
+          "timeframe": "Within 8 hours",
+          "requires_approval": true
+        },
+        {
+          "category": "resources",
+          "action": "Confirm hydration-treatment and rehydration-supply readiness",
+          "owner": "Operations lead",
+          "timeframe": "Within 8 hours",
+          "requires_approval": true
+        }
       ],
       "escalate": [
-        {"category": "field_investigation", "action": "Start enhanced investigation of common exposure settings and affected facilities", "owner": "Epidemiology lead", "timeframe": "Within 2 hours", "requires_approval": true},
-        {"category": "partner_coordination", "action": "Prepare coordination request for food, water or environmental health partners", "owner": "Incident Commander", "timeframe": "Within 3 hours", "requires_approval": true},
-        {"category": "communication", "action": "Draft approved prevention and hygiene guidance for internal and partner review", "owner": "Incident communications", "timeframe": "Within 4 hours", "requires_approval": true}
+        {
+          "category": "field_investigation",
+          "action": "Start enhanced investigation of common exposure settings and affected facilities",
+          "owner": "Epidemiology lead",
+          "timeframe": "Within 2 hours",
+          "requires_approval": true
+        },
+        {
+          "category": "partner_coordination",
+          "action": "Prepare coordination request for food, water or environmental health partners",
+          "owner": "Incident Commander",
+          "timeframe": "Within 3 hours",
+          "requires_approval": true
+        },
+        {
+          "category": "communication",
+          "action": "Draft approved prevention and hygiene guidance for internal and partner review",
+          "owner": "Incident communications",
+          "timeframe": "Within 4 hours",
+          "requires_approval": true
+        }
       ]
     },
     "dengue": {
       "monitor": [
-        {"category": "environmental_context", "action": "Review rainfall, temperature and recent vector-activity context for the affected district", "owner": "Surveillance analyst", "timeframe": "Within 1 business day", "requires_approval": false},
-        {"category": "laboratory", "action": "Check dengue test positivity, pending tests and reporting completeness", "owner": "Laboratory liaison", "timeframe": "Within 1 business day", "requires_approval": false}
+        {
+          "category": "environmental_context",
+          "action": "Review rainfall, temperature and recent vector-activity context for the affected district",
+          "owner": "Surveillance analyst",
+          "timeframe": "Within 1 business day",
+          "requires_approval": false
+        },
+        {
+          "category": "laboratory",
+          "action": "Check dengue test positivity, pending tests and reporting completeness",
+          "owner": "Laboratory liaison",
+          "timeframe": "Within 1 business day",
+          "requires_approval": false
+        }
       ],
       "investigate": [
-        {"category": "vector_control", "action": "Prepare vector-control readiness review for high-signal localities", "owner": "Operations lead", "timeframe": "Within 8 hours", "requires_approval": true},
-        {"category": "clinical_readiness", "action": "Review fluid-management capacity and warning-sign escalation readiness", "owner": "Clinical operations", "timeframe": "Within 8 hours", "requires_approval": true},
-        {"category": "communication", "action": "Prepare internal dengue awareness note focused on surveillance and prevention steps", "owner": "Incident communications", "timeframe": "Within 8 hours", "requires_approval": true}
+        {
+          "category": "vector_control",
+          "action": "Prepare vector-control readiness review for high-signal localities",
+          "owner": "Operations lead",
+          "timeframe": "Within 8 hours",
+          "requires_approval": true
+        },
+        {
+          "category": "clinical_readiness",
+          "action": "Review fluid-management capacity and warning-sign escalation readiness",
+          "owner": "Clinical operations",
+          "timeframe": "Within 8 hours",
+          "requires_approval": true
+        },
+        {
+          "category": "communication",
+          "action": "Prepare internal dengue awareness note focused on surveillance and prevention steps",
+          "owner": "Incident communications",
+          "timeframe": "Within 8 hours",
+          "requires_approval": true
+        }
       ],
       "escalate": [
-        {"category": "vector_control", "action": "Activate priority vector-control coordination for affected locations", "owner": "Operations lead", "timeframe": "Within 2 hours", "requires_approval": true},
-        {"category": "clinical_readiness", "action": "Confirm rapid access to diagnostics, fluids and escalation pathways for severe warning signs", "owner": "Clinical operations", "timeframe": "Within 2 hours", "requires_approval": true},
-        {"category": "communication", "action": "Draft approved partner update covering dengue signal status and readiness actions", "owner": "Incident communications", "timeframe": "Within 4 hours", "requires_approval": true}
+        {
+          "category": "vector_control",
+          "action": "Activate priority vector-control coordination for affected locations",
+          "owner": "Operations lead",
+          "timeframe": "Within 2 hours",
+          "requires_approval": true
+        },
+        {
+          "category": "clinical_readiness",
+          "action": "Confirm rapid access to diagnostics, fluids and escalation pathways for severe warning signs",
+          "owner": "Clinical operations",
+          "timeframe": "Within 2 hours",
+          "requires_approval": true
+        },
+        {
+          "category": "communication",
+          "action": "Draft approved partner update covering dengue signal status and readiness actions",
+          "owner": "Incident communications",
+          "timeframe": "Within 4 hours",
+          "requires_approval": true
+        }
       ]
     }
   },
   "condition_guidance": {
-    "ili": ["Review respiratory testing demand and healthcare attendance pressure", "Check antiviral and respiratory-support supply indicators"],
-    "age": ["Review food, water and shared-location exposure reports", "Check hydration-treatment and diagnostic capacity"],
-    "dengue": ["Review rainfall and vector-activity context", "Check diagnostic, fluid-management and vector-control readiness"]
+    "ili": [
+      "Review respiratory testing demand and healthcare attendance pressure",
+      "Check antiviral and respiratory-support supply indicators"
+    ],
+    "age": [
+      "Review food, water and shared-location exposure reports",
+      "Check hydration-treatment and diagnostic capacity"
+    ],
+    "dengue": [
+      "Review rainfall and vector-activity context",
+      "Check diagnostic, fluid-management and vector-control readiness"
+    ]
   }
 }

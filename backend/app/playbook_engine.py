@@ -20,9 +20,11 @@ def select_response_plan(condition_code: str, level: str) -> dict[str, Any]:
         raise ValueError("Unsupported alert level")
     if condition_code not in playbooks["condition_guidance"]:
         raise ValueError("Unsupported condition")
-    common_actions = playbooks["levels"][level]
-    condition_actions = playbooks.get("condition_actions", {}).get(condition_code, {}).get(level, [])
-    actions = [*common_actions, *condition_actions]
+    # Disease-specific actions are authoritative when supplied by the approved
+    # package. Keep the generic level fallback for older playbook files.
+    actions = playbooks.get("condition_actions", {}).get(condition_code, {}).get(level)
+    if actions is None:
+        actions = playbooks["levels"][level]
     return {
         "playbook_version": playbooks["version"],
         "condition_code": condition_code,
