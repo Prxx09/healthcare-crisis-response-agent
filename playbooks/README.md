@@ -20,14 +20,19 @@ condition_guidance:
   ili: [Review respiratory testing demand]
   age: [Review food and water exposure reports]
   dengue: [Review rainfall and vector activity]
+condition_actions:
+  ili:
+    monitor: []
+    investigate: []
+    escalate: []
 PLAYBOOK_DATA_END
 ```
 
-Every severity level must contain at least one action. Each action requires `category`, `action`, `owner`, `timeframe`, and a Boolean `requires_approval` value.
+Every severity level must contain at least one shared action. `condition_actions` is optional, but when present it should define disease-specific action lists for `ili`, `age`, and `dengue` across `monitor`, `investigate`, and `escalate`. Each action requires `category`, `action`, `owner`, `timeframe`, and a Boolean `requires_approval` value.
 
 ## Pinecone RAG
 
-The backend can optionally index the approved playbook in Pinecone and retrieve relevant action and condition guidance for the selected condition and alert level. Retrieval is supplementary: the versioned JSON remains authoritative for executable actions, owners, timeframes, and approval gates.
+The backend can optionally index the approved playbook in Pinecone and retrieve relevant shared actions, disease-specific actions, and condition guidance for the selected condition and alert level. Retrieval is supplementary: the versioned JSON remains authoritative for executable actions, owners, timeframes, and approval gates.
 
 Configure `PINECONE_API_KEY` and the `PINECONE_*` settings in `backend/.env`, install backend requirements, then run from the repository root:
 
