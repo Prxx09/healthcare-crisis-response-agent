@@ -62,6 +62,23 @@ def _validate_playbook(payload: Any) -> dict[str, Any]:
     guidance = payload.get("condition_guidance")
     if not isinstance(guidance, dict) or not all(isinstance(items, list) for items in guidance.values()):
         raise ValueError("condition_guidance must map condition codes to lists")
+    condition_actions = payload.get("condition_actions", {})
+    if condition_actions:
+        if not isinstance(condition_actions, dict):
+            raise ValueError("condition_actions must map condition codes to level action lists")
+        for condition_code, level_map in condition_actions.items():
+            if condition_code not in guidance or not isinstance(level_map, dict):
+                raise ValueError("condition_actions must use known condition codes")
+            if set(level_map) != required_levels:
+                raise ValueError(f"condition_actions for {condition_code} must contain monitor, investigate and escalate")
+            for level, actions in level_map.items():
+                if not isinstance(actions, list):
+                    raise ValueError(f"condition_actions for {condition_code}/{level} must be a list")
+                for action in actions:
+                    if not isinstance(action, dict) or not required_action_fields.issubset(action):
+                        raise ValueError(f"Each {condition_code}/{level} action must contain {', '.join(sorted(required_action_fields))}")
+                    if not isinstance(action["requires_approval"], bool):
+                        raise ValueError("requires_approval must be true or false")
     return payload
 
 
@@ -91,7 +108,13 @@ def parse_playbook_document(filename: str, data: bytes) -> dict[str, Any]:
         "summary": {
             "version": str(playbook["version"]),
             "conditions": sorted(playbook["condition_guidance"]),
-            "action_counts": {level: len(actions) for level, actions in playbook["levels"].items()},
+            "action_counts": {
+                level: len(actions) + sum(
+                    len(level_map.get(level, []))
+                    for level_map in playbook.get("condition_actions", {}).values()
+                )
+                for level, actions in playbook["levels"].items()
+            },
         },
         "playbook": playbook,
     }
