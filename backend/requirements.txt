@@ -6,3 +6,5 @@ PyYAML==6.0.3
 python-docx==1.2.0
 pypdf==6.10.0
 reportlab==4.4.9
+tzdata==2026.5
+pinecone>=7.0.0,<8.0.0

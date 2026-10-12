@@ -11,7 +11,7 @@ from .briefing_engine import generate_briefing
 from .config import Settings
 from .forecast_engine import build_scenarios
 from .investigation_engine import investigate_cluster
-from .playbook_engine import select_response_plan
+from .pinecone_rag import select_response_plan_with_rag
 from .signal_engine import detect_source_signals, summarise_clusters
 from .supabase_client import SupabaseRepository
 
@@ -107,7 +107,12 @@ async def run_workflow(
     timer = perf_counter()
     if selected_cluster:
         try:
-            response_plan = select_response_plan(condition_code, selected_cluster["level"])
+            response_plan = await select_response_plan_with_rag(
+                settings,
+                condition_code,
+                selected_cluster["level"],
+                query_context=f"Region {region_code}; analysis date {analysis_date.isoformat()}",
+            )
             steps.append(_step("response", "Response Agent", "completed", timer, {
                 "playbook_version": response_plan["playbook_version"],
                 "action_count": len(response_plan["actions"]),

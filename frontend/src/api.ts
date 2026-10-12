@@ -1,4 +1,4 @@
-import type { AlertRecord, Condition, EvidenceBriefing, ForecastResponse, IncidentAction, IncidentTimeline, InvestigationResponse, Observation, PlaybookLibrary, PlaybookValidation, Region, ResponsePlan, SignalResponse, WorkflowRun } from "./types";
+import type { AlertRecord, Condition, EmailAlertConfig, EmailAlertDashboard, EvidenceBriefing, ForecastBriefing, ForecastResponse, IncidentAction, IncidentTimeline, InvestigationResponse, Observation, PlaybookLibrary, PlaybookValidation, Region, ResponsePlan, SignalResponse, WorkflowRun } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
@@ -8,7 +8,7 @@ async function getJson<T>(path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-async function sendJson<T>(path: string, method: "POST" | "PATCH", body: unknown): Promise<T> {
+async function sendJson<T>(path: string, method: "POST" | "PUT" | "PATCH", body: unknown): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
     method,
     headers: { "Content-Type": "application/json" },
@@ -32,6 +32,10 @@ export const api = {
   forecast: (analysisDate: string, region: string, condition: string) => {
     const query = new URLSearchParams({ analysis_date: analysisDate, region_code: region, condition_code: condition, horizon_days: "7" });
     return getJson<ForecastResponse>(`/api/v1/forecast?${query}`);
+  },
+  forecastBriefing: (analysisDate: string, region: string, condition: string) => {
+    const query = new URLSearchParams({ analysis_date: analysisDate, region_code: region, condition_code: condition, horizon_days: "7" });
+    return getJson<ForecastBriefing>(`/api/v1/forecast/briefing?${query}`);
   },
   investigation: (analysisDate: string, region: string, condition: string) => {
     const query = new URLSearchParams({ analysis_date: analysisDate, region_code: region, condition_code: condition, window_days: "14" });
@@ -68,14 +72,19 @@ export const api = {
   incidentTimeline: (alertId: number) => getJson<IncidentTimeline>(`/api/v1/incidents/${alertId}/timeline`),
   situationReportUrl: (alertId: number) => `${API_URL}/api/v1/incidents/${alertId}/report.pdf`,
   generateAlerts: (analysisDate: string, regionCode: string, conditionCode: string) =>
-    sendJson<{ analysis_date: string; eligible_clusters: number; created: number }>("/api/v1/alerts/generate", "POST", {
+    sendJson<{ analysis_date: string; eligible_clusters: number; created: number; existing: number; incident_master_notifications: { sent: number; failed: number; skipped: number } }>("/api/v1/alerts/generate", "POST", {
       analysis_date: analysisDate,
       baseline_days: 28,
       region_code: regionCode,
       condition_code: conditionCode,
     }),
   decideAlert: (id: number, status: "approved" | "dismissed", reviewerName: string, note?: string) =>
-    sendJson<{ alert: AlertRecord; actions_created: number }>(`/api/v1/alerts/${id}/decision`, "PATCH", { status, reviewer_name: reviewerName, note: note || null }),
+    sendJson<{ alert: AlertRecord; actions_created: number; owner_notifications: { sent: number; failed: number; skipped: number } }>(`/api/v1/alerts/${id}/decision`, "PATCH", { status, reviewer_name: reviewerName, note: note || null }),
   updateAction: (id: number, status: IncidentAction["status"], assigneeName?: string, note?: string) =>
     sendJson<IncidentAction>(`/api/v1/actions/${id}`, "PATCH", { status, assignee_name: assigneeName || null, note: note || null }),
+  emailAlertDashboard: () => getJson<EmailAlertDashboard>("/api/v1/email-alerts/dashboard"),
+  saveEmailAlertConfig: (config: Pick<EmailAlertConfig, "enabled" | "schedule_time" | "timezone" | "recipients" | "cc" | "minimum_level" | "incident_master_email" | "owner_emails">) =>
+    sendJson<EmailAlertConfig>("/api/v1/email-alerts/config", "PUT", config),
+  sendEmailAlerts: (analysisDate: string) =>
+    sendJson<{ status: string; alerts_sent: number }>("/api/v1/email-alerts/send", "POST", { analysis_date: analysisDate }),
 };

@@ -101,8 +101,24 @@ class SupabaseRepository:
         })
         return rows[0] if rows else None
 
+    async def get_alerts_for_date(self, analysis_date: str) -> list[dict[str, Any]]:
+        return await self.privileged_get("alerts", {
+            "select": "id,analysis_date,alert_level,evidence_summary,rule_version,status,reviewed_by,review_note,approved_at,created_at,regions!inner(code,name),conditions!inner(code,name)",
+            "analysis_date": f"eq.{analysis_date}",
+            "alert_level": "in.(investigate,escalate)",
+            "order": "alert_level.desc,created_at.desc",
+        })
+
     async def create_alert(self, payload: dict[str, Any]) -> list[dict[str, Any]]:
-        return await self.post("alerts", payload)
+        try:
+            return await self.post("alerts", payload)
+        except httpx.HTTPStatusError as error:
+            # Alert generation is intentionally idempotent. PostgREST does not
+            # apply resolution=ignore-duplicates reliably to the partial unique
+            # index used for analysis scope, so treat that conflict as existing.
+            if error.response.status_code == 409:
+                return []
+            raise
 
     async def decide_alert(self, alert_id: int, payload: dict[str, Any]) -> list[dict[str, Any]]:
         return await self.patch("alerts", {"id": f"eq.{alert_id}", "status": "eq.pending_approval"}, payload)
@@ -123,3 +139,46 @@ class SupabaseRepository:
 
     async def update_action(self, action_id: int, payload: dict[str, Any]) -> list[dict[str, Any]]:
         return await self.patch("incident_actions", {"id": f"eq.{action_id}"}, payload)
+
+    async def get_latest_observation_date(self) -> str | None:
+        rows = await self.get("surveillance_observations", {
+            "select": "observation_date",
+            "order": "observation_date.desc",
+            "limit": "1",
+        })
+        return rows[0]["observation_date"] if rows else None
+
+    async def get_email_alert_config(self) -> dict[str, Any]:
+        rows = await self.privileged_get("email_alert_config", {"select": "*", "id": "eq.1", "limit": "1"})
+        if not rows:
+            raise RuntimeError("Email alert configuration is missing. Apply the email scheduler migration.")
+        return rows[0]
+
+    async def update_email_alert_config(self, payload: dict[str, Any]) -> dict[str, Any]:
+        rows = await self.patch("email_alert_config", {"id": "eq.1"}, payload)
+        if not rows:
+            raise RuntimeError("Email alert configuration could not be updated")
+        return rows[0]
+
+    async def get_email_alert_deliveries(self, limit: int = 50) -> list[dict[str, Any]]:
+        return await self.privileged_get("email_alert_deliveries", {
+            "select": "*", "order": "sent_at.desc", "limit": str(limit),
+        })
+
+    async def get_scheduled_email_delivery(self, schedule_date: str) -> dict[str, Any] | None:
+        rows = await self.privileged_get("email_alert_deliveries", {
+            "select": "*", "trigger_mode": "eq.scheduled", "schedule_date": f"eq.{schedule_date}", "limit": "1",
+        })
+        return rows[0] if rows else None
+
+    async def create_email_alert_delivery(self, payload: dict[str, Any]) -> dict[str, Any] | None:
+        rows = await self.post("email_alert_deliveries", payload)
+        return rows[0] if rows else None
+
+    async def create_task_owner_notification(self, payload: dict[str, Any]) -> dict[str, Any] | None:
+        rows = await self.post("task_owner_notifications", payload)
+        return rows[0] if rows else None
+
+    async def create_incident_review_notification(self, payload: dict[str, Any]) -> dict[str, Any] | None:
+        rows = await self.post("incident_review_notifications", payload)
+        return rows[0] if rows else None

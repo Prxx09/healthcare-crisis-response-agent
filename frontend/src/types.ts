@@ -56,6 +56,18 @@ export interface ForecastResponse {
   scenarios: ForecastScenario[];
   assumptions: string[];
 }
+export interface ForecastBriefing {
+  provider: "deterministic" | "groq" | "huggingface";
+  model: string | null;
+  generated_at: string;
+  headline: string;
+  outlook: string;
+  key_points: string[];
+  uncertainty: string;
+  planning_note: string;
+  disclaimer: string;
+  fallback_reason?: string;
+}
 export interface InvestigationResponse {
   analysis_date: string;
   window_start: string;
@@ -146,3 +158,36 @@ export interface TimelineEvent {
   detail: string;
 }
 export interface IncidentTimeline { alert_id: number; events: TimelineEvent[] }
+export interface EmailAlertConfig {
+  id: number;
+  enabled: boolean;
+  schedule_time: string;
+  timezone: string;
+  recipients: string[];
+  cc: string[];
+  minimum_level: "investigate" | "escalate";
+  incident_master_email: string;
+  owner_emails: Record<string, string>;
+  updated_at: string;
+}
+export interface EmailAlertDelivery {
+  id: number;
+  trigger_mode: "scheduled" | "manual";
+  status: "success" | "failed" | "skipped";
+  analysis_date: string | null;
+  schedule_date: string | null;
+  recipients: string[];
+  cc: string[];
+  alert_ids: number[];
+  subject: string | null;
+  error_message: string | null;
+  sent_at: string;
+}
+export interface EmailAlertDashboard {
+  config: EmailAlertConfig;
+  scheduler_status: "running" | "paused";
+  smtp_configured: boolean;
+  next_scheduled_at: string | null;
+  total_sends: number;
+  history: EmailAlertDelivery[];
+}

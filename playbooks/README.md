@@ -24,3 +24,16 @@ PLAYBOOK_DATA_END
 ```
 
 Every severity level must contain at least one action. Each action requires `category`, `action`, `owner`, `timeframe`, and a Boolean `requires_approval` value.
+
+## Pinecone RAG
+
+The backend can optionally index the approved playbook in Pinecone and retrieve relevant action and condition guidance for the selected condition and alert level. Retrieval is supplementary: the versioned JSON remains authoritative for executable actions, owners, timeframes, and approval gates.
+
+Configure `PINECONE_API_KEY` and the `PINECONE_*` settings in `backend/.env`, install backend requirements, then run from the repository root:
+
+```powershell
+$env:PYTHONPATH = "backend"
+python -m app.index_playbooks
+```
+
+Set `PINECONE_RAG_ENABLED=true` only after indexing. If Pinecone is disabled, unavailable, or temporarily fails, the application returns the deterministic plan and marks retrieval as `fallback`; it does not invent or remove response actions.
