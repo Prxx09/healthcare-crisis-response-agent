@@ -73,7 +73,19 @@ export interface InvestigationResponse {
   window_start: string;
   peak_date: string;
   peak_total: number;
-  source_comparison: Array<{ signal_source: string; window_start_count: number; latest_count: number; window_change_pct: number }>;
+  source_comparison: Array<{
+    signal_source: string;
+    window_start_count: number;
+    latest_count: number;
+    initial_median: number;
+    recent_median: number;
+    comparison_period_days: number;
+    window_change_pct: number | null;
+    peak_count: number;
+    peak_date: string;
+    outlier_count: number;
+    outlier_dates: string[];
+  }>;
   data_quality: Record<string, number>;
   regional_context: { average_rainfall_index: number | null; average_mobility_index: number | null; average_temperature_c: number | null };
   findings: string[];
