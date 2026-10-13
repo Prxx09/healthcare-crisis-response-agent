@@ -67,7 +67,6 @@ class SupabaseRepository:
             "order": "observation_date.asc",
         }
         if end_date:
-            params["observation_date"] = f"gte.{start_date}"
             params["and"] = f"(observation_date.lte.{end_date})"
         if region_code:
             params["regions.code"] = f"eq.{region_code}"

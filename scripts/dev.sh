@@ -27,9 +27,9 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-backend_port="${BACKEND_PORT:-8001}"
-if [[ "$backend_port" != "8001" && "$backend_port" != "8002" ]]; then
-  echo "BACKEND_PORT must be 8001 or 8002." >&2
+backend_port="${BACKEND_PORT:-8000}"
+if [[ "$backend_port" != "8000" && "$backend_port" != "8001" && "$backend_port" != "8002" ]]; then
+  echo "BACKEND_PORT must be 8000, 8001, or 8002." >&2
   exit 1
 fi
 

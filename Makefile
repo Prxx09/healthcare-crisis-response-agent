@@ -1,6 +1,6 @@
 .PHONY: setup dev api web check data
 
-BACKEND_PORT ?= 8001
+BACKEND_PORT ?= 8000
 
 setup:
 	./scripts/setup.sh

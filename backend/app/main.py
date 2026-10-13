@@ -55,6 +55,17 @@ async def conditions() -> list[dict]:
     return await SupabaseRepository().get_conditions()
 
 
+@app.get("/api/v1/data-availability")
+async def data_availability() -> dict[str, str]:
+    try:
+        latest_date = await SupabaseRepository().get_latest_observation_date()
+    except httpx.HTTPError as error:
+        raise HTTPException(status_code=502, detail="Unable to read surveillance data availability") from error
+    if not latest_date:
+        raise HTTPException(status_code=404, detail="No surveillance observations are available")
+    return {"latest_date": latest_date}
+
+
 @app.get("/api/v1/observations")
 async def observations(
     start_date: date = Query(...),
@@ -208,6 +219,33 @@ async def briefing(
         raise HTTPException(status_code=404, detail=str(error)) from error
     except httpx.HTTPError as error:
         raise HTTPException(status_code=502, detail="Unable to prepare briefing evidence") from error
+
+
+@app.get("/api/v1/briefing/aggregate")
+async def aggregate_briefing(
+    analysis_date: date = Query(...),
+    region_code: str | None = None,
+    condition_code: str | None = None,
+) -> dict:
+    start_date = analysis_date - timedelta(days=28)
+    repository = SupabaseRepository()
+    try:
+        rows = await repository.get_observations(
+            start_date.isoformat(), analysis_date.isoformat(), region_code, condition_code
+        )
+        clusters = summarise_clusters(detect_source_signals(rows, analysis_date, 28))
+        region_name = rows[0]["regions"]["name"] if region_code and rows else "All regions"
+        condition_name = rows[0]["conditions"]["name"] if condition_code and rows else "All diseases"
+        return await generate_briefing({
+            "aggregate": True,
+            "analysis_date": analysis_date.isoformat(),
+            "scope": f"{condition_name} · {region_name}",
+            "region_name": region_name,
+            "condition_name": condition_name,
+            "clusters": clusters,
+        }, settings)
+    except httpx.HTTPError as error:
+        raise HTTPException(status_code=502, detail="Unable to prepare aggregate briefing evidence") from error
 
 
 @app.get("/api/v1/workflow")

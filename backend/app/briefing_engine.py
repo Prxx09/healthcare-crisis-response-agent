@@ -91,6 +91,34 @@ def _parse_model_json(content: Any, required: set[str], list_keys: set[str], lab
 
 
 def deterministic_briefing(evidence: dict[str, Any], fallback_reason: str | None = None) -> dict[str, Any]:
+    if evidence.get("aggregate"):
+        clusters = evidence.get("clusters", [])
+        scope = evidence.get("scope", "Selected surveillance scope")
+        highest_level = "escalate" if any(item["level"] == "escalate" for item in clusters) else (
+            "investigate" if any(item["level"] == "investigate" for item in clusters) else "monitor"
+        )
+        evidence_points = [
+            f"{item['condition']} in {item['region']}: {item['level']} with {len(item['supporting_sources'])} supporting sources."
+            for item in clusters[:8]
+        ] or ["No source crossed a configured review threshold."]
+        result = {
+            "provider": "deterministic",
+            "model": None,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "headline": f"{highest_level.title()} surveillance summary for {scope}" if clusters else f"No active threshold signal for {scope}",
+            "situation": f"{len(clusters)} active region-disease cluster(s) were identified on {evidence['analysis_date']}.",
+            "evidence": evidence_points,
+            "uncertainties": [
+                "The dataset is synthetic and aggregated.",
+                "Signals indicate threshold crossings and do not establish causation.",
+                "Each region-disease case requires individual review before action.",
+            ],
+            "recommended_review": "Open the relevant evidence cards and review each case before submitting alerts for human approval.",
+            "disclaimer": "Decision support only. An Incident Commander retains authority for alert and response actions.",
+        }
+        if fallback_reason:
+            result["fallback_reason"] = fallback_reason
+        return result
     cluster = evidence.get("cluster")
     investigation = evidence["investigation"]
     forecast = evidence["forecast"]

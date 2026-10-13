@@ -1,5 +1,5 @@
--- One-year synthetic, aggregate data seed for a dashboard and rule-engine demonstration.
--- Keeps four regions constant and introduces three transparent, documented signal patterns.
+-- Synthetic, aggregate data seed from 1 October 2025 through 13 October 2026.
+-- Keeps four regions constant and includes transparent threshold-crossing demonstration scenarios.
 
 insert into public.regions (code, name, population, active)
 values
@@ -16,8 +16,13 @@ values
   ('dengue', 'Dengue', 'Vector-borne febrile illness', true)
 on conflict (code) do update set name = excluded.name, syndrome_group = excluded.syndrome_group, active = excluded.active;
 
+-- Preserve one idempotent synthetic series when extending the original seed window.
+update public.surveillance_observations
+set synthetic_run_id = 'seed-42-oct-2025-oct-2026'
+where synthetic_run_id = 'seed-42-oct-2025-sep-2026';
+
 with days as (
-  select generate_series(date '2025-10-01', date '2026-09-30', interval '1 day')::date as observation_date
+  select generate_series(date '2025-10-01', date '2026-10-13', interval '1 day')::date as observation_date
 ), numbered_days as (
   select observation_date, row_number() over (order by observation_date) - 1 as day_index from days
 )
@@ -40,7 +45,7 @@ set rainfall_index = excluded.rainfall_index,
     context_note = excluded.context_note;
 
 with days as (
-  select generate_series(date '2025-10-01', date '2026-09-30', interval '1 day')::date as observation_date
+  select generate_series(date '2025-10-01', date '2026-10-13', interval '1 day')::date as observation_date
 ), numbered_days as (
   select observation_date, row_number() over (order by observation_date) - 1 as day_index from days
 ), base_signals as (
@@ -64,6 +69,31 @@ with days as (
       when c.code = 'age' and r.code = 'lakeside_district' and d.day_index between 35 and 42 then 1.0 + 0.18 * least(d.day_index - 34, 5)
       when c.code = 'dengue' and r.code = 'east_district' and d.day_index >= 68 then 1.0 + 0.06 * (d.day_index - 67)
       else 1.0
+    end * case
+      -- Small lead-in increases make the demonstration trend visible while
+      -- keeping the 13 October values well above the 28-day baseline.
+      when d.observation_date between date '2026-10-10' and date '2026-10-12'
+        and (
+          (r.code, c.code) in (
+            ('central_district', 'ili'),
+            ('central_district', 'dengue'),
+            ('east_district', 'age'),
+            ('east_district', 'dengue'),
+            ('lakeside_district', 'age'),
+            ('lakeside_district', 'dengue'),
+            ('north_district', 'ili'),
+            ('north_district', 'dengue')
+          )
+        ) then 1.15 + 0.10 * (d.observation_date - date '2026-10-10')
+      when d.observation_date = date '2026-10-13' and r.code = 'central_district' and c.code = 'ili' then 2.8
+      when d.observation_date = date '2026-10-13' and r.code = 'central_district' and c.code = 'dengue' then 3.2
+      when d.observation_date = date '2026-10-13' and r.code = 'east_district' and c.code = 'age' then 3.0
+      when d.observation_date = date '2026-10-13' and r.code = 'east_district' and c.code = 'dengue' then 2.8
+      when d.observation_date = date '2026-10-13' and r.code = 'lakeside_district' and c.code = 'age' then 2.7
+      when d.observation_date = date '2026-10-13' and r.code = 'lakeside_district' and c.code = 'dengue' then 2.4
+      when d.observation_date = date '2026-10-13' and r.code = 'north_district' and c.code = 'ili' then 2.6
+      when d.observation_date = date '2026-10-13' and r.code = 'north_district' and c.code = 'dengue' then 3.4
+      else 1.0
     end
   ))::integer as visits
   from numbered_days d
@@ -83,7 +113,7 @@ select
   x.coverage_pct,
   'validated',
   x.source_note,
-  'seed-42-oct-2025-sep-2026'
+  'seed-42-oct-2025-oct-2026'
 from base_signals b
 cross join lateral (
   values

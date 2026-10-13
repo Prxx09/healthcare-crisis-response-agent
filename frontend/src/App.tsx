@@ -55,9 +55,10 @@ function levelLabel(level: Cluster["level"]) {
 export default function App() {
   const [regions, setRegions] = useState<Region[]>([]);
   const [conditions, setConditions] = useState<Condition[]>([]);
-  const [region, setRegion] = useState("central_district");
-  const [condition, setCondition] = useState("ili");
-  const [analysisDate, setAnalysisDate] = useState("2025-12-15");
+  const [region, setRegion] = useState("all");
+  const [condition, setCondition] = useState("all");
+  const [analysisDate, setAnalysisDate] = useState("");
+  const [latestAnalysisDate, setLatestAnalysisDate] = useState("");
   const [observations, setObservations] = useState<Observation[]>([]);
   const [signals, setSignals] = useState<SignalResponse | null>(null);
   const [forecast, setForecast] = useState<ForecastResponse | null>(null);
@@ -82,6 +83,13 @@ export default function App() {
   const [briefingLoading, setBriefingLoading] = useState(false);
   const [briefingOpen, setBriefingOpen] = useState(false);
   const [briefingError, setBriefingError] = useState<string | null>(null);
+  const [briefingScope, setBriefingScope] = useState("");
+  const [caseBriefing, setCaseBriefing] = useState<EvidenceBriefing | null>(null);
+  const [caseBriefingKey, setCaseBriefingKey] = useState<string | null>(null);
+  const [caseBriefingLoading, setCaseBriefingLoading] = useState(false);
+  const [caseBriefingOpen, setCaseBriefingOpen] = useState(false);
+  const [caseBriefingError, setCaseBriefingError] = useState<string | null>(null);
+  const [expandedClusterKey, setExpandedClusterKey] = useState<string | null>(null);
   const briefingRequestRef = useRef(0);
   const [workflow, setWorkflow] = useState<WorkflowRun | null>(null);
   const [actions, setActions] = useState<IncidentAction[]>([]);
@@ -105,26 +113,48 @@ export default function App() {
   }
 
   useEffect(() => {
-    Promise.all([api.regions(), api.conditions()])
-      .then(([regionData, conditionData]) => { setRegions(regionData); setConditions(conditionData); })
-      .catch(() => setError("The dashboard could not load its reference data."));
+    Promise.all([api.regions(), api.conditions(), api.dataAvailability()])
+      .then(([regionData, conditionData, availability]) => {
+        setRegions(regionData);
+        setConditions(conditionData);
+        setLatestAnalysisDate(availability.latest_date);
+        setAnalysisDate(availability.latest_date);
+      })
+      .catch(() => {
+        setLoading(false);
+        setError("The dashboard could not load its reference data or latest analysis date.");
+      });
   }, []);
 
   useEffect(() => {
+    if (!analysisDate) return;
+    const hasSpecificScope = region !== "all" && condition !== "all";
     setLoading(true);
     setError(null);
     briefingRequestRef.current += 1;
     setBriefing(null);
     setBriefingOpen(false);
     setBriefingError(null);
+    setBriefingScope("");
+    setCaseBriefing(null);
+    setCaseBriefingKey(null);
+    setCaseBriefingLoading(false);
+    setCaseBriefingOpen(false);
+    setCaseBriefingError(null);
+    setExpandedClusterKey(null);
     setForecastBriefing(null);
     setForecastBriefingError(null);
     Promise.all([
-      api.observations(isoDaysBefore(analysisDate, 28), analysisDate, region, condition),
+      api.observations(
+        isoDaysBefore(analysisDate, 28),
+        analysisDate,
+        region === "all" ? undefined : region,
+        condition === "all" ? undefined : condition,
+      ),
       api.signals(analysisDate),
-      api.forecast(analysisDate, region, condition),
-      api.investigation(analysisDate, region, condition),
-      api.workflow(analysisDate, region, condition),
+      hasSpecificScope ? api.forecast(analysisDate, region, condition) : Promise.resolve(null),
+      hasSpecificScope ? api.investigation(analysisDate, region, condition) : Promise.resolve(null),
+      hasSpecificScope ? api.workflow(analysisDate, region, condition) : Promise.resolve(null),
     ])
       .then(([observationData, signalData, forecastData, investigationData, workflowData]) => { setObservations(observationData); setSignals(signalData); setForecast(forecastData); setInvestigation(investigationData); setWorkflow(workflowData); })
       .catch(() => setError("The surveillance API is unavailable. Confirm that the FastAPI service is running."))
@@ -166,19 +196,41 @@ export default function App() {
     } finally { setPlaybookLoading(false); }
   }
 
-  async function generateBriefing() {
+  async function generateCaseBriefing(targetRegion: string, targetCondition: string) {
+    const requestId = ++briefingRequestRef.current;
+    const targetKey = `${targetRegion}-${targetCondition}`;
+    setCaseBriefingKey(targetKey);
+    setCaseBriefing(null);
+    setCaseBriefingLoading(true);
+    setCaseBriefingOpen(true);
+    setCaseBriefingError(null);
+    try {
+      const result = await api.briefing(analysisDate, targetRegion, targetCondition);
+      if (requestId !== briefingRequestRef.current) return;
+      setCaseBriefing(result);
+    } catch {
+      if (requestId === briefingRequestRef.current) setCaseBriefingError("The case briefing could not be generated.");
+    }
+    finally { setCaseBriefingLoading(false); }
+  }
+
+  async function generateFilteredBriefing() {
     const requestId = ++briefingRequestRef.current;
     setBriefingLoading(true);
     setBriefingError(null);
+    setBriefingScope(scopeLabel);
     try {
-      const result = await api.briefing(analysisDate, region, condition);
+      const result = await api.aggregateBriefing(
+        analysisDate,
+        region === "all" ? undefined : region,
+        condition === "all" ? undefined : condition,
+      );
       if (requestId !== briefingRequestRef.current) return;
       setBriefing(result);
       setBriefingOpen(true);
     } catch {
-      if (requestId === briefingRequestRef.current) setBriefingError("The evidence briefing could not be generated.");
-    }
-    finally { setBriefingLoading(false); }
+      if (requestId === briefingRequestRef.current) setBriefingError("The filtered evidence briefing could not be generated.");
+    } finally { setBriefingLoading(false); }
   }
 
   async function generateForecastBriefing() {
@@ -229,11 +281,11 @@ export default function App() {
     }
   }
 
-  async function generateAlert() {
+  async function generateAlert(targetRegion = region, targetCondition = condition) {
     setAlertLoading(true);
     setAlertMessage(null);
     try {
-      const result = await api.generateAlerts(analysisDate, region, condition);
+      const result = await api.generateAlerts(analysisDate, targetRegion, targetCondition);
       if (result.created > 0) {
         const notification = result.incident_master_notifications;
         const emailSummary = notification.sent
@@ -273,15 +325,34 @@ export default function App() {
     const rows = new Map<string, Record<string, string | number>>();
     observations.forEach((item) => {
       const row = rows.get(item.observation_date) ?? { date: formatChartDate(item.observation_date) };
-      row[item.signal_source] = item.observation_count;
+      row[item.signal_source] = Number(row[item.signal_source] ?? 0) + item.observation_count;
       rows.set(item.observation_date, row);
     });
     return [...rows.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, row]) => row);
   }, [observations]);
 
-  const selectedClusters = signals?.clusters.filter((item) => item.region_code === region && item.condition_code === condition) ?? [];
-  const latestVisits = [...observations].reverse().find((item) => item.signal_source === "visits")?.observation_count ?? 0;
-  const activeLevel = selectedClusters.length > 0 ? selectedClusters[0].level : "normal";
+  const hasSpecificScope = region !== "all" && condition !== "all";
+  const selectedClusters = signals?.clusters.filter((item) =>
+    (region === "all" || item.region_code === region) &&
+    (condition === "all" || item.condition_code === condition)
+  ) ?? [];
+  const displayedClusters = expandedClusterKey
+    ? [...selectedClusters].sort((left, right) => {
+        const leftKey = `${left.region_code}-${left.condition_code}`;
+        const rightKey = `${right.region_code}-${right.condition_code}`;
+        return leftKey === expandedClusterKey ? -1 : rightKey === expandedClusterKey ? 1 : 0;
+      })
+    : selectedClusters;
+  const latestObservationDate = observations.at(-1)?.observation_date;
+  const latestVisits = observations
+    .filter((item) => item.observation_date === latestObservationDate && item.signal_source === "visits")
+    .reduce((total, item) => total + item.observation_count, 0);
+  const activeLevel = selectedClusters.some((item) => item.level === "escalate")
+    ? "escalate"
+    : selectedClusters.some((item) => item.level === "investigate")
+      ? "investigate"
+      : selectedClusters.some((item) => item.level === "monitor") ? "monitor" : "normal";
+  const scopeLabel = `${condition === "all" ? "All diseases" : conditions.find((item) => item.code === condition)?.name ?? condition} · ${region === "all" ? "All regions" : regions.find((item) => item.code === region)?.name ?? region}`;
   const forecastChartData = useMemo(() => {
     if (!forecast) return [];
     const rows = new Map<string, Record<string, string | number>>();
@@ -307,11 +378,11 @@ export default function App() {
   }, [forecast]);
 
   useEffect(() => {
-    if (activeLevel === "normal") { setResponsePlan(null); return; }
+    if (!hasSpecificScope || activeLevel === "normal") { setResponsePlan(null); return; }
     api.responsePlan(condition, activeLevel)
       .then(setResponsePlan)
       .catch(() => setResponsePlan(null));
-  }, [activeLevel, condition]);
+  }, [activeLevel, condition, hasSpecificScope]);
 
   return (
     <div className="app-shell">
@@ -338,9 +409,9 @@ export default function App() {
         </section> : view === "dashboard" ? <>
 
         <section className="filters card">
-          <label>Region<select value={region} onChange={(event) => setRegion(event.target.value)}>{regions.map((item) => <option key={item.code} value={item.code}>{item.name}</option>)}</select></label>
-          <label>Condition<select value={condition} onChange={(event) => setCondition(event.target.value)}>{conditions.map((item) => <option key={item.code} value={item.code}>{item.name}</option>)}</select></label>
-          <label>Analysis date<input type="date" min="2025-10-29" max="2026-09-30" value={analysisDate} onChange={(event) => { if (isValidIsoDate(event.target.value)) setAnalysisDate(event.target.value); }} /></label>
+          <label>Region<select value={region} onChange={(event) => setRegion(event.target.value)}><option value="all">All regions</option>{regions.map((item) => <option key={item.code} value={item.code}>{item.name}</option>)}</select></label>
+          <label>Condition<select value={condition} onChange={(event) => setCondition(event.target.value)}><option value="all">All diseases</option>{conditions.map((item) => <option key={item.code} value={item.code}>{item.name}</option>)}</select></label>
+          <label>Analysis date<input type="date" min="2025-10-29" max={latestAnalysisDate || undefined} value={analysisDate} onChange={(event) => { if (isValidIsoDate(event.target.value)) setAnalysisDate(event.target.value); }} /></label>
           <button onClick={() => setRefreshKey((value) => value + 1)} disabled={loading}><RefreshCw size={16} /> {loading ? "Refreshing..." : "Refresh"}</button>
         </section>
 
@@ -350,13 +421,13 @@ export default function App() {
         {workflow && <section className="card workflow-strip"><div className="workflow-title"><WorkflowIcon size={19} /><div><strong>Workflow trace</strong><span>{workflow.status.replaceAll("_", " ")} · {workflow.duration_ms} ms</span></div></div><div className="workflow-steps">{workflow.steps.map((step, index) => <div className={`workflow-step ${step.status}`} key={step.name}><span>{index + 1}</span><div><strong>{step.component}</strong><small>{step.status.replaceAll("_", " ")} · {step.duration_ms} ms</small></div></div>)}</div></section>}
 
         <section className="metrics">
-          <article className="card metric"><span>Current status</span><strong className={`status-text ${activeLevel}`}>{selectedClusters.length === 0 ? "No active signal" : levelLabel(selectedClusters[0].level)}</strong><small>Selected region and condition</small></article>
+          <article className="card metric"><span>Current status</span><strong className={`status-text ${activeLevel}`}>{selectedClusters.length === 0 ? "No active signal" : levelLabel(activeLevel as Cluster["level"])}</strong><small>{hasSpecificScope ? "Selected region and disease" : "Highest level in the selected scope"}</small></article>
           <article className="card metric"><span>Latest visits</span><strong>{latestVisits.toLocaleString()}</strong><small>Daily aggregate count</small></article>
-          <article className="card metric"><span>Supporting signals</span><strong>{selectedClusters[0]?.supporting_sources.length ?? 0}</strong><small>Corroborating data sources</small></article>
+          <article className="card metric"><span>{hasSpecificScope ? "Supporting signals" : "Active clusters"}</span><strong>{hasSpecificScope ? selectedClusters[0]?.supporting_sources.length ?? 0 : selectedClusters.length}</strong><small>{hasSpecificScope ? "Corroborating data sources" : "Threshold crossings across the scope"}</small></article>
           <article className="card metric"><span>Approval state</span><strong className="approval"><CheckCircle2 size={23} /> Human gate</strong><small>No response is issued automatically</small></article>
         </section>
 
-        <section className="card forecast-overview">
+        {hasSpecificScope && <section className="card forecast-overview">
           <div className="forecast-heading"><div><span className="forecast-eyebrow">Seven-day forecast outlook</span><h2>Planning scenarios for the selected scope</h2><p>{conditions.find((item) => item.code === condition)?.name ?? condition} · {regions.find((item) => item.code === region)?.name ?? region} · From {formatDate(analysisDate)}</p></div><button className="forecast-ai-button" onClick={generateForecastBriefing} disabled={!forecast || forecastBriefingLoading}><Sparkles size={16} /> {forecastBriefingLoading ? "Preparing outlook…" : "Explain with AI"}</button></div>
           {forecast && forecastSummary ? <>
             <div className="forecast-kpis">
@@ -373,17 +444,43 @@ export default function App() {
             {forecastBriefing && <div className="forecast-briefing"><div className="forecast-briefing-title"><Sparkles size={19} /><div><span>AI interpretation · {forecastBriefing.provider}{forecastBriefing.model ? ` · ${forecastBriefing.model}` : ""}</span><strong>{forecastBriefing.headline}</strong></div></div><p>{forecastBriefing.outlook}</p><ul>{forecastBriefing.key_points.map((item) => <li key={item}>{item}</li>)}</ul><div className="forecast-planning-note"><strong>Planning note</strong><p>{forecastBriefing.planning_note}</p></div><small>{forecastBriefing.uncertainty} {forecastBriefing.disclaimer}</small>{forecastBriefing.fallback_reason && <span className="fallback-note">Fallback used: {forecastBriefing.fallback_reason}</span>}</div>}
             <details className="forecast-assumptions"><summary>Method and assumptions</summary>{forecast.assumptions.map((item) => <p key={item}>{item}</p>)}</details>
           </> : <div className="forecast-loading">{loading ? "Preparing forecast scenarios…" : "Forecast data is unavailable for this selection."}</div>}
-        </section>
+        </section>}
 
         <section className="content-grid">
-          <article className="card panel trend-panel"><div className="panel-heading"><div><h2>28-day surveillance trend</h2><p>Daily aggregate signals for the selected scope</p></div>{loading && <span className="loading">Loading…</span>}</div>
-            <div className="chart-wrap" role="img" aria-label={`Twenty-eight-day surveillance trend for ${conditions.find((item) => item.code === condition)?.name ?? condition} in ${regions.find((item) => item.code === region)?.name ?? region}. Three series show visits, lab positives, and pharmacy demand.`}><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" stroke="#e7edf3" /><XAxis dataKey="date" tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} /><Tooltip /><Legend /><Line type="monotone" dataKey="visits" name="Visits" stroke="#1261a0" strokeWidth={2.5} dot={false} /><Line type="monotone" dataKey="lab_positives" name="Lab positives" stroke="#dc6b35" strokeWidth={2} dot={false} /><Line type="monotone" dataKey="pharmacy_demand" name="Pharmacy demand" stroke="#2c9c83" strokeWidth={2} dot={false} /></LineChart></ResponsiveContainer></div>
+          <article className="card panel trend-panel"><div className="panel-heading"><div><h2>28-day surveillance trend</h2><p>Daily aggregate signals · {scopeLabel}</p></div>{loading && <span className="loading">Loading…</span>}</div>
+            <div className="chart-wrap" role="img" aria-label={`Twenty-eight-day surveillance trend for ${scopeLabel}. Three series show visits, lab positives, and pharmacy demand.`}><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" stroke="#e7edf3" /><XAxis dataKey="date" tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} /><Tooltip /><Legend /><Line type="monotone" dataKey="visits" name="Visits" stroke="#1261a0" strokeWidth={2.5} dot={false} /><Line type="monotone" dataKey="lab_positives" name="Lab positives" stroke="#dc6b35" strokeWidth={2} dot={false} /><Line type="monotone" dataKey="pharmacy_demand" name="Pharmacy demand" stroke="#2c9c83" strokeWidth={2} dot={false} /></LineChart></ResponsiveContainer></div>
           </article>
 
-          <article className="card panel evidence-panel"><div className="panel-heading"><div><h2>Evidence review</h2><p>Transparent rule output for the selected date</p></div><div className="evidence-actions"><button className="briefing-button" onClick={generateBriefing} disabled={briefingLoading}><Sparkles size={13} /> {briefingLoading ? "Preparing…" : "Prepare briefing"}</button>{selectedClusters.some((item) => item.corroborated && item.level !== "monitor") && <button className="generate-button" onClick={generateAlert} disabled={alertLoading}>Send to review</button>}</div></div>
-             {selectedClusters.length === 0 ? <div className="empty"><CheckCircle2 size={34} /><strong>No threshold crossed</strong><p>The current values remain within the configured review thresholds.</p></div> : selectedClusters.map((cluster) => <div className="cluster" key={`${cluster.region_code}-${cluster.condition_code}`}><div className="cluster-title"><span className={`level ${cluster.level}`}>{levelLabel(cluster.level)}</span><strong>{cluster.corroborated ? "Corroborated signal" : "Single-source signal"}</strong></div>{cluster.signals.map((signal) => <div className="signal-row" key={signal.signal_source}><span>{SOURCE_LABELS[signal.signal_source] ?? signal.signal_source}</span><strong>{signal.current_count}</strong><small>{signal.percent_change > 0 ? "+" : ""}{signal.percent_change}% vs baseline</small></div>)}</div>)}
+          <article className="card panel evidence-panel"><div className="panel-heading"><div><h2>Evidence review</h2><p>Transparent rule output · {scopeLabel}</p></div>{selectedClusters.length > 0 && <div className="evidence-actions"><button className="briefing-button" onClick={generateFilteredBriefing} disabled={briefingLoading}><Sparkles size={13} /> {briefingLoading ? "Preparing…" : "Brief filtered scope"}</button>{hasSpecificScope && selectedClusters.some((item) => item.corroborated && item.level !== "monitor") && <button className="generate-button" onClick={() => generateAlert()} disabled={alertLoading}>Send to review</button>}</div>}</div>
+             {selectedClusters.length === 0 ? <div className="empty"><CheckCircle2 size={34} /><strong>No threshold crossed</strong><p>The current values remain within the configured review thresholds.</p></div> : <div className="evidence-cluster-grid">{displayedClusters.map((cluster) => {
+               const clusterKey = `${cluster.region_code}-${cluster.condition_code}`;
+               const isExpanded = expandedClusterKey === clusterKey;
+               return <article className={`cluster ${isExpanded ? "expanded" : ""}`} key={clusterKey} role="button" tabIndex={0} aria-expanded={isExpanded} onClick={() => setExpandedClusterKey(isExpanded ? null : clusterKey)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setExpandedClusterKey(isExpanded ? null : clusterKey); } }}>
+                 <div className="cluster-title"><div className="cluster-identity"><strong>{cluster.condition}</strong><div className="cluster-meta"><span>{cluster.region}</span><small>{cluster.corroborated ? "Corroborated signal" : "Single-source signal"}</small></div></div><span className={`level ${cluster.level}`}>{levelLabel(cluster.level)}</span></div>
+                 <div className="cluster-signal-summary">{cluster.signals.map((signal) => <div className="signal-row" key={signal.signal_source}><span>{SOURCE_LABELS[signal.signal_source] ?? signal.signal_source}</span><strong>{signal.current_count}</strong><small>{signal.percent_change > 0 ? "+" : ""}{signal.percent_change}% vs baseline</small></div>)}</div>
+                 {!isExpanded && <span className="evidence-expand-label">View complete details</span>}
+                 {isExpanded && <div className="evidence-expanded" onClick={(event) => event.stopPropagation()}>
+                   <div className="evidence-detail-heading"><strong>Source calculations</strong><span>Analysis date {formatDate(analysisDate)}</span></div>
+                   <div className="evidence-detail-list">{cluster.signals.map((signal) => <div className="evidence-detail-row" key={signal.signal_source}>
+                     <strong>{SOURCE_LABELS[signal.signal_source] ?? signal.signal_source}</strong>
+                     <span><small>Current</small>{signal.current_count.toLocaleString()}</span>
+                     <span><small>28-day baseline</small>{signal.baseline_mean.toLocaleString()}</span>
+                     <span><small>Change</small>{signal.percent_change > 0 ? "+" : ""}{signal.percent_change}%</span>
+                     <span><small>Z-score</small>{signal.z_score ?? "—"}</span>
+                     <span><small>Source level</small>{levelLabel(signal.level)}</span>
+                   </div>)}</div>
+                 </div>}
+                 {isExpanded && <div className="evidence-card-footer"><span className="evidence-expand-label">Hide details</span><div className="evidence-card-actions" onClick={(event) => event.stopPropagation()}><button className="briefing-button" onClick={() => generateCaseBriefing(cluster.region_code, cluster.condition_code)} disabled={caseBriefingLoading}><Sparkles size={14} /> {caseBriefingLoading && caseBriefingKey === clusterKey ? "Preparing…" : "Brief this case"}</button>{cluster.corroborated && cluster.level !== "monitor" && <button className="generate-button" onClick={() => generateAlert(cluster.region_code, cluster.condition_code)} disabled={alertLoading}>Send case to review</button>}</div></div>}
+                 {isExpanded && caseBriefingKey === clusterKey && (caseBriefing || caseBriefingLoading || caseBriefingError) && <details className="case-briefing-dropdown" open={caseBriefingOpen} onClick={(event) => event.stopPropagation()} onToggle={(event) => setCaseBriefingOpen(event.currentTarget.open)}>
+                   <summary><span><Sparkles size={16} /> Case briefing</span><small>{caseBriefingLoading ? "Preparing this case briefing…" : caseBriefing ? `${cluster.condition} · ${cluster.region}` : "Unable to generate briefing"}</small></summary>
+                   {caseBriefingLoading && <div className="briefing-inline-loading">Reviewing the evidence for this case…</div>}
+                   {caseBriefingError && <div className="briefing-inline-error">{caseBriefingError}</div>}
+                   {caseBriefing && <div className="briefing-inline-content"><div className="briefing-header"><Sparkles size={20} /><div><span>AI interpretation · {caseBriefing.provider}{caseBriefing.model ? ` · ${caseBriefing.model}` : ""}</span><h2>{caseBriefing.headline}</h2></div></div><p className="briefing-situation">{caseBriefing.situation}</p><div className="briefing-columns"><div><strong>Supporting evidence</strong><ul>{caseBriefing.evidence.map((item) => <li key={item}>{item}</li>)}</ul></div><div><strong>Uncertainties</strong><ul>{caseBriefing.uncertainties.map((item) => <li key={item}>{item}</li>)}</ul></div></div><div className="review-callout"><strong>Recommended review</strong><p>{caseBriefing.recommended_review}</p></div>{caseBriefing.fallback_reason && <p className="fallback-note">Fallback used: {caseBriefing.fallback_reason}</p>}<small>{caseBriefing.disclaimer}</small></div>}
+                 </details>}
+               </article>;
+             })}</div>}
              {(briefing || briefingLoading || briefingError) && <details className="briefing-dropdown" open={briefingOpen} onToggle={(event) => setBriefingOpen(event.currentTarget.open)}>
-               <summary><span><Sparkles size={16} /> AI briefing</span><small>{briefingLoading ? "Preparing evidence summary..." : briefing ? "Generated for the current selection" : "Unable to generate briefing"}</small></summary>
+               <summary><span><Sparkles size={16} /> AI briefing</span><small>{briefingLoading ? `Preparing briefing for ${briefingScope || "the selected scope"}...` : briefing ? `Generated for ${briefingScope || "the selected scope"}` : "Unable to generate briefing"}</small></summary>
                {briefingLoading && <div className="briefing-inline-loading">Preparing the evidence briefing...</div>}
                {briefingError && <div className="briefing-inline-error">{briefingError}</div>}
                {briefing && <div className="briefing-inline-content"><div className="briefing-header"><Sparkles size={20} /><div><span>AI interpretation · {briefing.provider}{briefing.model ? ` · ${briefing.model}` : ""}</span><h2>{briefing.headline}</h2></div></div><p className="briefing-situation">{briefing.situation}</p><div className="briefing-columns"><div><strong>Supporting evidence</strong><ul>{briefing.evidence.map((item) => <li key={item}>{item}</li>)}</ul></div><div><strong>Uncertainties</strong><ul>{briefing.uncertainties.map((item) => <li key={item}>{item}</li>)}</ul></div></div><div className="review-callout"><strong>Recommended review</strong><p>{briefing.recommended_review}</p></div>{briefing.fallback_reason && <p className="fallback-note">Fallback used: {briefing.fallback_reason}</p>}<small>{briefing.disclaimer}</small></div>}
@@ -391,14 +488,14 @@ export default function App() {
           </article>
          </section>
          {(briefing || briefingLoading || briefingError) && <details className="briefing-dropdown briefing-dropdown-wide" open={briefingOpen} onToggle={(event) => setBriefingOpen(event.currentTarget.open)}>
-           <summary><span><Sparkles size={16} /> AI briefing</span><small>{briefingLoading ? "Preparing evidence summary..." : briefing ? "Generated for the current selection" : "Unable to generate briefing"}</small></summary>
+           <summary><span><Sparkles size={16} /> AI briefing</span><small>{briefingLoading ? `Preparing briefing for ${briefingScope || "the selected scope"}...` : briefing ? `Generated for ${briefingScope || "the selected scope"}` : "Unable to generate briefing"}</small></summary>
            {briefingLoading && <div className="briefing-inline-loading">Preparing the evidence briefing...</div>}
            {briefingError && <div className="briefing-inline-error">{briefingError}</div>}
            {briefing && <div className="briefing-inline-content"><div className="briefing-header"><Sparkles size={20} /><div><span>AI interpretation · {briefing.provider}{briefing.model ? ` · ${briefing.model}` : ""}</span><h2>{briefing.headline}</h2></div></div><p className="briefing-situation">{briefing.situation}</p><div className="briefing-columns"><div><strong>Supporting evidence</strong><ul>{briefing.evidence.map((item) => <li key={item}>{item}</li>)}</ul></div><div><strong>Uncertainties</strong><ul>{briefing.uncertainties.map((item) => <li key={item}>{item}</li>)}</ul></div></div><div className="review-callout"><strong>Recommended review</strong><p>{briefing.recommended_review}</p></div>{briefing.fallback_reason && <p className="fallback-note">Fallback used: {briefing.fallback_reason}</p>}<small>{briefing.disclaimer}</small></div>}
          </details>}
-         <section className="card investigation-panel"><div className="panel-heading"><div><h2>Cluster investigation</h2><p>Fourteen-day evidence correlation for the selected scope</p></div>{investigation && <span className="forecast-change">Peak {formatDate(investigation.peak_date)}</span>}</div>
+         {hasSpecificScope && <section className="card investigation-panel"><div className="panel-heading"><div><h2>Cluster investigation</h2><p>Fourteen-day evidence correlation for the selected scope</p></div>{investigation && <span className="forecast-change">Peak {formatDate(investigation.peak_date)}</span>}</div>
           <div className="investigation-grid"><div><strong>Source comparison</strong><div className="source-cards">{investigation?.source_comparison.map((item) => <div key={item.signal_source}><span>{SOURCE_LABELS[item.signal_source] ?? item.signal_source}</span><strong>{item.recent_median}</strong><small>{item.comparison_period_days}-day recent median</small><small>{item.window_change_pct === null ? "New activity from zero baseline" : `${item.window_change_pct > 0 ? "+" : ""}${item.window_change_pct}% vs early median`}</small><small>Latest {item.latest_count} · Peak {item.peak_count}</small>{item.outlier_count > 0 && <small className="outlier-note">{item.outlier_count} unusual day{item.outlier_count === 1 ? "" : "s"} detected</small>}</div>)}</div></div><div><strong>Regional context</strong><dl className="context-list"><div><dt>Rainfall index</dt><dd>{investigation?.regional_context.average_rainfall_index ?? "—"}</dd></div><div><dt>Mobility index</dt><dd>{investigation?.regional_context.average_mobility_index ?? "—"}</dd></div><div><dt>Temperature</dt><dd>{investigation?.regional_context.average_temperature_c ?? "—"}°C</dd></div></dl></div><div><strong>Investigation findings</strong><ul className="finding-list">{investigation?.findings.map((item) => <li key={item}>{item}</li>)}</ul></div></div>
-        </section>
+        </section>}
         {responsePlan && <section className="card response-panel"><div className="panel-heading"><div><h2>Recommended response playbook</h2><p>Version {responsePlan.playbook_version} · Actions remain behind the human approval gate</p></div><span className={`level ${responsePlan.alert_level}`}>{levelLabel(responsePlan.alert_level)}</span></div><div className="response-grid"><div className="action-list">{responsePlan.actions.map((item) => <div className="response-action" key={`${item.category}-${item.action}`}><span>{item.category}</span><div><strong>{item.action}</strong><p>{item.owner} · {item.timeframe}</p></div>{item.requires_approval && <small>Approval required</small>}</div>)}</div><aside><strong>Condition guidance</strong>{responsePlan.condition_guidance.map((item) => <p key={item}>{item}</p>)}<div className="boundary-note">{responsePlan.boundary}</div></aside></div></section>}
         {briefing && <section className="card briefing-panel"><div className="briefing-header"><Sparkles size={23} /><div><span>AI interpretation · {briefing.provider}{briefing.model ? ` · ${briefing.model}` : ""}</span><h2>{briefing.headline}</h2></div></div><p className="briefing-situation">{briefing.situation}</p><div className="briefing-columns"><div><strong>Supporting evidence</strong><ul>{briefing.evidence.map((item) => <li key={item}>{item}</li>)}</ul></div><div><strong>Uncertainties</strong><ul>{briefing.uncertainties.map((item) => <li key={item}>{item}</li>)}</ul></div></div><div className="review-callout"><strong>Recommended review</strong><p>{briefing.recommended_review}</p></div>{briefing.fallback_reason && <p className="fallback-note">Fallback used: {briefing.fallback_reason}</p>}<small>{briefing.disclaimer}</small></section>}
         </> : null}

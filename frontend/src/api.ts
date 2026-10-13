@@ -1,6 +1,6 @@
 import type { AlertRecord, Condition, EmailAlertConfig, EmailAlertDashboard, EvidenceBriefing, ForecastBriefing, ForecastResponse, IncidentAction, IncidentTimeline, InvestigationResponse, Observation, PlaybookLibrary, PlaybookValidation, Region, ResponsePlan, SignalResponse, WorkflowRun } from "./types";
 
-const API_URL = (import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8001").replace(/\/$/, "");
+const API_URL = (import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000").replace(/\/$/, "");
 
 async function getJson<T>(path: string): Promise<T> {
   const response = await fetch(`${API_URL}${path}`);
@@ -24,8 +24,11 @@ async function sendJson<T>(path: string, method: "POST" | "PUT" | "PATCH", body:
 export const api = {
   regions: () => getJson<Region[]>("/api/v1/regions"),
   conditions: () => getJson<Condition[]>("/api/v1/conditions"),
-  observations: (start: string, end: string, region: string, condition: string) => {
-    const query = new URLSearchParams({ start_date: start, end_date: end, region_code: region, condition_code: condition });
+  dataAvailability: () => getJson<{ latest_date: string }>("/api/v1/data-availability"),
+  observations: (start: string, end: string, region?: string, condition?: string) => {
+    const query = new URLSearchParams({ start_date: start, end_date: end });
+    if (region) query.set("region_code", region);
+    if (condition) query.set("condition_code", condition);
     return getJson<Observation[]>(`/api/v1/observations?${query}`);
   },
   signals: (analysisDate: string) => getJson<SignalResponse>(`/api/v1/signals?analysis_date=${analysisDate}&baseline_days=28`),
@@ -48,6 +51,12 @@ export const api = {
   briefing: (analysisDate: string, region: string, condition: string) => {
     const query = new URLSearchParams({ analysis_date: analysisDate, region_code: region, condition_code: condition });
     return getJson<EvidenceBriefing>(`/api/v1/briefing?${query}`);
+  },
+  aggregateBriefing: (analysisDate: string, region?: string, condition?: string) => {
+    const query = new URLSearchParams({ analysis_date: analysisDate });
+    if (region) query.set("region_code", region);
+    if (condition) query.set("condition_code", condition);
+    return getJson<EvidenceBriefing>(`/api/v1/briefing/aggregate?${query}`);
   },
   workflow: (analysisDate: string, region: string, condition: string) => {
     const query = new URLSearchParams({ analysis_date: analysisDate, region_code: region, condition_code: condition });

@@ -134,13 +134,13 @@ Open:
 - Action tracker: `http://127.0.0.1:5173/action-tracker`
 - Email alerts: `http://127.0.0.1:5173/email-alerts`
 - Playbook library: `http://127.0.0.1:5173/playbook-library`
-- API documentation: `http://127.0.0.1:8001/docs`
-- Health check: `http://127.0.0.1:8001/health`
+- API documentation: `http://127.0.0.1:8000/docs`
+- Health check: `http://127.0.0.1:8000/health`
 
 Individual services can be started with `make api` and `make web` on Linux/macOS. On Windows, you can also run the backend from the repository root:
 
 ```powershell
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8001 --app-dir backend
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000 --app-dir backend
 ```
 
 Then run the frontend in a second PowerShell window:
@@ -246,7 +246,7 @@ Backend variables:
 | `SUPABASE_PUBLISHABLE_KEY` | Yes | Read-only synthetic surveillance access |
 | `SUPABASE_SECRET_KEY` | For protected workflows | Server-only alert, action, timeline, and report access |
 | `ALLOWED_ORIGINS` | Yes | Dashboard origins allowed by CORS |
-| `BACKEND_PORT` | No | Local API port used by launch scripts; `8001` or `8002`, default `8001` |
+| `BACKEND_PORT` | No | Local API port used by launch scripts; default `8000`, with `8001` and `8002` supported as alternatives |
 | `AI_PROVIDER` | No | `deterministic`, `groq`, or `huggingface` |
 | `GROQ_API_KEY` and `GROQ_MODEL` | When using Groq | Groq structured summary generation |
 | `HUGGINGFACE_TOKEN` and `HUGGINGFACE_MODEL` | When using Hugging Face | Hugging Face structured summary generation |
@@ -268,7 +268,7 @@ Frontend variables:
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `VITE_API_URL` | `http://127.0.0.1:8001` | FastAPI base URL; use port 8002 when starting the backend on 8002 |
+| `VITE_API_URL` | `http://127.0.0.1:8000` | FastAPI base URL; ports 8001 and 8002 are supported alternatives |
 
 Never use `VITE_` variables for Supabase secret or AI-provider credentials; Vite exposes them to the browser.
 

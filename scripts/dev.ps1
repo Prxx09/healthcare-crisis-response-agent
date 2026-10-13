@@ -15,9 +15,9 @@ if (-not (Test-Path ".\backend\.env")) {
     Write-Error "backend\.env is missing. Copy backend\.env.example and add the required values."
 }
 
-$BackendPort = if ($env:BACKEND_PORT) { $env:BACKEND_PORT } else { "8001" }
-if ($BackendPort -notin @("8001", "8002")) {
-    Write-Error "BACKEND_PORT must be 8001 or 8002."
+$BackendPort = if ($env:BACKEND_PORT) { $env:BACKEND_PORT } else { "8000" }
+if ($BackendPort -notin @("8000", "8001", "8002")) {
+    Write-Error "BACKEND_PORT must be 8000, 8001, or 8002."
 }
 
 Write-Host "API:       http://127.0.0.1:$BackendPort"
