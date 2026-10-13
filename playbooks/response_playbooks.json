@@ -1,282 +1,88 @@
 {
-  "version": "1.0",
+  "version": "1.1",
+  "name": "Healthcare Crisis Response Playbooks",
+  "description": "Approved operational response actions for public-health surveillance alerts.",
   "levels": {
     "monitor": [
-      {
-        "category": "investigation",
-        "action": "Verify feed completeness and recent reporting delays",
-        "owner": "Surveillance analyst",
-        "timeframe": "Within 1 business day",
-        "requires_approval": false
-      },
-      {
-        "category": "monitoring",
-        "action": "Continue daily review of all available signals",
-        "owner": "Surveillance team",
-        "timeframe": "Daily",
-        "requires_approval": false
-      }
+      {"category": "data review", "action": "Check the latest reports for missing data, delays or an unusual increase", "owner": "Epidemiology lead", "timeframe": "Within 1 business day", "requires_approval": false},
+      {"category": "facility check", "action": "Ask the facilities reporting the largest increases to confirm their figures and current workload", "owner": "Operations lead", "timeframe": "Within 1 business day", "requires_approval": false}
     ],
     "investigate": [
-      {
-        "category": "investigation",
-        "action": "Validate the cluster with contributing facilities and laboratories",
-        "owner": "Epidemiology lead",
-        "timeframe": "Within 4 hours",
-        "requires_approval": false
-      },
-      {
-        "category": "resources",
-        "action": "Review near-term staffing, laboratory and pharmacy readiness",
-        "owner": "Operations lead",
-        "timeframe": "Within 8 hours",
-        "requires_approval": true
-      },
-      {
-        "category": "communication",
-        "action": "Prepare an internal situation summary for leadership",
-        "owner": "Incident communications",
-        "timeframe": "Within 8 hours",
-        "requires_approval": true
-      }
+      {"category": "investigation", "action": "Confirm the increase with the facilities and laboratories that supplied the data", "owner": "Epidemiology lead", "timeframe": "Within 4 hours", "requires_approval": false},
+      {"category": "supplies", "action": "Check staffing, test capacity and essential supply levels at the busiest facilities", "owner": "Operations lead", "timeframe": "Within 8 hours", "requires_approval": true},
+      {"category": "team update", "action": "Prepare a short internal update that states what increased, where it increased and what remains uncertain", "owner": "Incident communications", "timeframe": "Within 8 hours", "requires_approval": true}
     ],
     "escalate": [
-      {
-        "category": "coordination",
-        "action": "Convene the incident assessment team",
-        "owner": "Incident Commander",
-        "timeframe": "Within 1 hour",
-        "requires_approval": true
-      },
-      {
-        "category": "investigation",
-        "action": "Initiate enhanced case and exposure investigation",
-        "owner": "Epidemiology lead",
-        "timeframe": "Within 2 hours",
-        "requires_approval": true
-      },
-      {
-        "category": "resources",
-        "action": "Activate priority staffing, laboratory and supply readiness checks",
-        "owner": "Operations lead",
-        "timeframe": "Within 2 hours",
-        "requires_approval": true
-      },
-      {
-        "category": "communication",
-        "action": "Prepare approved partner and public communication drafts",
-        "owner": "Incident communications",
-        "timeframe": "Within 4 hours",
-        "requires_approval": true
-      }
+      {"category": "response coordination", "action": "Open an incident response call and assign named owners to the immediate actions", "owner": "Operations lead", "timeframe": "Within 1 hour", "requires_approval": true},
+      {"category": "daily reporting", "action": "Start a daily report of new cases, laboratory results, facility pressure and data gaps", "owner": "Epidemiology lead", "timeframe": "Within 2 hours", "requires_approval": true},
+      {"category": "supplies", "action": "Move staff and essential supplies to the facilities reporting the greatest pressure", "owner": "Operations lead", "timeframe": "Within 4 hours", "requires_approval": true},
+      {"category": "public message", "action": "Prepare an approved public update with clear prevention advice and information on when to seek care", "owner": "Incident communications", "timeframe": "Within 4 hours", "requires_approval": true}
     ]
   },
   "condition_actions": {
     "ili": {
       "monitor": [
-        {
-          "category": "surveillance",
-          "action": "Review respiratory visit trends across facilities reporting ILI-like symptoms",
-          "owner": "Surveillance analyst",
-          "timeframe": "Within 1 business day",
-          "requires_approval": false
-        },
-        {
-          "category": "laboratory",
-          "action": "Check recent respiratory test positivity and pending test volume",
-          "owner": "Laboratory liaison",
-          "timeframe": "Within 1 business day",
-          "requires_approval": false
-        }
+        {"category": "visit review", "action": "Compare today's fever, cough and breathing-illness visits with the previous four weeks and list the facilities reporting the largest increases", "owner": "Epidemiology lead", "timeframe": "Within 1 business day", "requires_approval": false},
+        {"category": "test status", "action": "Confirm how many influenza and respiratory tests are positive, pending or delayed at reporting laboratories", "owner": "Epidemiology lead", "timeframe": "Within 1 business day", "requires_approval": false},
+        {"category": "supplies", "action": "Check reported stocks of masks, oxygen supplies, fever medicines and antiviral medicines at the busiest facilities", "owner": "Operations lead", "timeframe": "Within 1 business day", "requires_approval": false}
       ],
       "investigate": [
-        {
-          "category": "facility_coordination",
-          "action": "Ask high-volume facilities to confirm triage load and respiratory isolation readiness",
-          "owner": "Operations lead",
-          "timeframe": "Within 6 hours",
-          "requires_approval": true
-        },
-        {
-          "category": "pharmacy",
-          "action": "Review antiviral, fever-management and respiratory-support supply indicators",
-          "owner": "Pharmacy coordinator",
-          "timeframe": "Within 8 hours",
-          "requires_approval": true
-        },
-        {
-          "category": "communication",
-          "action": "Prepare internal respiratory-syndrome awareness guidance for clinical teams",
-          "owner": "Incident communications",
-          "timeframe": "Within 8 hours",
-          "requires_approval": true
-        }
+        {"category": "facility check", "action": "Ask the facilities reporting the largest increases to confirm respiratory visit counts, triage wait times, available isolation space and staff absences", "owner": "Operations lead", "timeframe": "Within 4 hours", "requires_approval": false},
+        {"category": "test status", "action": "Confirm respiratory test turnaround times, the number of samples waiting and any reporting delays", "owner": "Epidemiology lead", "timeframe": "Within 4 hours", "requires_approval": false},
+        {"category": "supplies", "action": "Count available masks, oxygen supplies, fever medicines and antiviral medicines at facilities with the highest respiratory demand", "owner": "Operations lead", "timeframe": "Within 8 hours", "requires_approval": true},
+        {"category": "team update", "action": "Prepare a one-page internal update covering respiratory visits, test results, facility pressure and unresolved data gaps", "owner": "Incident communications", "timeframe": "Within 8 hours", "requires_approval": true}
       ],
       "escalate": [
-        {
-          "category": "clinical_readiness",
-          "action": "Activate respiratory surge readiness checks for triage, isolation space and staffing",
-          "owner": "Operations lead",
-          "timeframe": "Within 2 hours",
-          "requires_approval": true
-        },
-        {
-          "category": "laboratory",
-          "action": "Prioritize respiratory specimen routing and turnaround-time tracking",
-          "owner": "Laboratory liaison",
-          "timeframe": "Within 2 hours",
-          "requires_approval": true
-        },
-        {
-          "category": "communication",
-          "action": "Draft approved respiratory-risk update for partner coordination channels",
-          "owner": "Incident communications",
-          "timeframe": "Within 4 hours",
-          "requires_approval": true
-        }
+        {"category": "facility capacity", "action": "Activate respiratory surge plans at the busiest facilities, including separate respiratory triage and staffed isolation areas", "owner": "Operations lead", "timeframe": "Within 2 hours", "requires_approval": true},
+        {"category": "daily reporting", "action": "Start daily reporting of respiratory visits, admissions, available isolation spaces and staff absences by facility", "owner": "Epidemiology lead", "timeframe": "Within 2 hours", "requires_approval": true},
+        {"category": "laboratory", "action": "Prioritize respiratory samples from the most affected facilities and report the testing backlog each day", "owner": "Epidemiology lead", "timeframe": "Within 3 hours", "requires_approval": true},
+        {"category": "supplies", "action": "Move masks, oxygen supplies, fever medicines and antiviral medicines to facilities with the highest respiratory demand", "owner": "Operations lead", "timeframe": "Within 4 hours", "requires_approval": true},
+        {"category": "public message", "action": "Prepare an approved public message on respiratory symptoms, ways to reduce spread and where to seek care", "owner": "Incident communications", "timeframe": "Within 4 hours", "requires_approval": true}
       ]
     },
     "age": {
       "monitor": [
-        {
-          "category": "surveillance",
-          "action": "Review gastroenteritis visits for shared-location or facility-level concentration",
-          "owner": "Surveillance analyst",
-          "timeframe": "Within 1 business day",
-          "requires_approval": false
-        },
-        {
-          "category": "data_quality",
-          "action": "Confirm emergency visit and laboratory feeds are complete for AGE-related symptoms",
-          "owner": "Data operations",
-          "timeframe": "Within 1 business day",
-          "requires_approval": false
-        }
+        {"category": "visit review", "action": "Compare today's vomiting and diarrhea visits with the previous four weeks and list the facilities or shared settings reporting the largest increases", "owner": "Epidemiology lead", "timeframe": "Within 1 business day", "requires_approval": false},
+        {"category": "test status", "action": "Confirm how many stool tests are positive, pending or delayed at reporting laboratories", "owner": "Epidemiology lead", "timeframe": "Within 1 business day", "requires_approval": false},
+        {"category": "supplies", "action": "Check oral rehydration solution, IV fluid and cleaning-supply levels at the busiest facilities", "owner": "Operations lead", "timeframe": "Within 1 business day", "requires_approval": false}
       ],
       "investigate": [
-        {
-          "category": "exposure_review",
-          "action": "Check available reports for common food, water or shared-location exposure patterns",
-          "owner": "Epidemiology lead",
-          "timeframe": "Within 4 hours",
-          "requires_approval": false
-        },
-        {
-          "category": "laboratory",
-          "action": "Review stool-test demand, positivity and diagnostic capacity indicators",
-          "owner": "Laboratory liaison",
-          "timeframe": "Within 8 hours",
-          "requires_approval": true
-        },
-        {
-          "category": "resources",
-          "action": "Confirm hydration-treatment and rehydration-supply readiness",
-          "owner": "Operations lead",
-          "timeframe": "Within 8 hours",
-          "requires_approval": true
-        }
+        {"category": "shared source check", "action": "Ask the highest-reporting facilities whether patients share a school, care home, event, food source or water source", "owner": "Epidemiology lead", "timeframe": "Within 4 hours", "requires_approval": false},
+        {"category": "test status", "action": "Confirm stool-test turnaround times, the number of samples waiting and any reporting delays", "owner": "Epidemiology lead", "timeframe": "Within 4 hours", "requires_approval": false},
+        {"category": "supplies", "action": "Count oral rehydration solution, IV fluids, disinfectant and protective equipment at facilities with the highest diarrhea demand", "owner": "Operations lead", "timeframe": "Within 8 hours", "requires_approval": true},
+        {"category": "team update", "action": "Prepare a one-page internal update covering illness reports, possible shared food or water sources, test results and data gaps", "owner": "Incident communications", "timeframe": "Within 8 hours", "requires_approval": true}
       ],
       "escalate": [
-        {
-          "category": "field_investigation",
-          "action": "Start enhanced investigation of common exposure settings and affected facilities",
-          "owner": "Epidemiology lead",
-          "timeframe": "Within 2 hours",
-          "requires_approval": true
-        },
-        {
-          "category": "partner_coordination",
-          "action": "Prepare coordination request for food, water or environmental health partners",
-          "owner": "Incident Commander",
-          "timeframe": "Within 3 hours",
-          "requires_approval": true
-        },
-        {
-          "category": "communication",
-          "action": "Draft approved prevention and hygiene guidance for internal and partner review",
-          "owner": "Incident communications",
-          "timeframe": "Within 4 hours",
-          "requires_approval": true
-        }
+        {"category": "source investigation", "action": "Coordinate inspection and sampling of the specific food, water or shared setting linked to the illness reports", "owner": "Operations lead", "timeframe": "Within 2 hours", "requires_approval": true},
+        {"category": "daily reporting", "action": "Start daily reporting of vomiting and diarrhea visits, affected facilities, shared exposure links and test results", "owner": "Epidemiology lead", "timeframe": "Within 2 hours", "requires_approval": true},
+        {"category": "laboratory", "action": "Prioritize stool and water samples linked to the affected locations and report the testing backlog each day", "owner": "Epidemiology lead", "timeframe": "Within 3 hours", "requires_approval": true},
+        {"category": "supplies", "action": "Move oral rehydration solution, IV fluids and cleaning supplies to facilities reporting the greatest demand", "owner": "Operations lead", "timeframe": "Within 4 hours", "requires_approval": true},
+        {"category": "public message", "action": "Prepare an approved public message on safe food and water, handwashing, symptoms and where to seek care", "owner": "Incident communications", "timeframe": "Within 4 hours", "requires_approval": true}
       ]
     },
     "dengue": {
       "monitor": [
-        {
-          "category": "environmental_context",
-          "action": "Review rainfall, temperature and recent vector-activity context for the affected district",
-          "owner": "Surveillance analyst",
-          "timeframe": "Within 1 business day",
-          "requires_approval": false
-        },
-        {
-          "category": "laboratory",
-          "action": "Check dengue test positivity, pending tests and reporting completeness",
-          "owner": "Laboratory liaison",
-          "timeframe": "Within 1 business day",
-          "requires_approval": false
-        }
+        {"category": "mosquito breeding check", "action": "Compare recent rainfall and temperature with reports of standing water and mosquito breeding sites in the affected district", "owner": "Operations lead", "timeframe": "Within 1 business day", "requires_approval": false},
+        {"category": "test status", "action": "Confirm how many dengue tests are positive, pending or delayed at reporting laboratories", "owner": "Epidemiology lead", "timeframe": "Within 1 business day", "requires_approval": false},
+        {"category": "fever visit review", "action": "Compare recent fever visits by locality and list the facilities reporting the largest increases", "owner": "Epidemiology lead", "timeframe": "Within 1 business day", "requires_approval": false}
       ],
       "investigate": [
-        {
-          "category": "vector_control",
-          "action": "Prepare vector-control readiness review for high-signal localities",
-          "owner": "Operations lead",
-          "timeframe": "Within 8 hours",
-          "requires_approval": true
-        },
-        {
-          "category": "clinical_readiness",
-          "action": "Review fluid-management capacity and warning-sign escalation readiness",
-          "owner": "Clinical operations",
-          "timeframe": "Within 8 hours",
-          "requires_approval": true
-        },
-        {
-          "category": "communication",
-          "action": "Prepare internal dengue awareness note focused on surveillance and prevention steps",
-          "owner": "Incident communications",
-          "timeframe": "Within 8 hours",
-          "requires_approval": true
-        }
+        {"category": "mosquito breeding check", "action": "Ask the local mosquito-control team to inspect neighborhoods around the facilities reporting the largest increases and list standing-water sites", "owner": "Operations lead", "timeframe": "Within 4 hours", "requires_approval": false},
+        {"category": "facility supplies", "action": "Check dengue test-kit stocks, IV fluid supplies and referral capacity at facilities serving the affected localities", "owner": "Operations lead", "timeframe": "Within 8 hours", "requires_approval": true},
+        {"category": "daily reporting", "action": "Start a daily locality report of suspected dengue visits, positive tests, pending tests and reporting delays", "owner": "Epidemiology lead", "timeframe": "Within 8 hours", "requires_approval": true},
+        {"category": "team update", "action": "Prepare an internal dengue update covering affected localities, standing-water reports, test results, facility readiness and data gaps", "owner": "Incident communications", "timeframe": "Within 8 hours", "requires_approval": true}
       ],
       "escalate": [
-        {
-          "category": "vector_control",
-          "action": "Activate priority vector-control coordination for affected locations",
-          "owner": "Operations lead",
-          "timeframe": "Within 2 hours",
-          "requires_approval": true
-        },
-        {
-          "category": "clinical_readiness",
-          "action": "Confirm rapid access to diagnostics, fluids and escalation pathways for severe warning signs",
-          "owner": "Clinical operations",
-          "timeframe": "Within 2 hours",
-          "requires_approval": true
-        },
-        {
-          "category": "communication",
-          "action": "Draft approved partner update covering dengue signal status and readiness actions",
-          "owner": "Incident communications",
-          "timeframe": "Within 4 hours",
-          "requires_approval": true
-        }
+        {"category": "mosquito control", "action": "Start targeted inspections and removal of standing water and mosquito breeding sites in the most affected localities", "owner": "Operations lead", "timeframe": "Within 2 hours", "requires_approval": true},
+        {"category": "daily reporting", "action": "Require daily facility reporting of suspected dengue visits, positive tests, pending tests and referral needs by locality", "owner": "Epidemiology lead", "timeframe": "Within 2 hours", "requires_approval": true},
+        {"category": "facility supplies", "action": "Move dengue test kits and IV fluid supplies to high-demand facilities and confirm referral capacity for patients with warning signs", "owner": "Operations lead", "timeframe": "Within 3 hours", "requires_approval": true},
+        {"category": "public message", "action": "Prepare an approved public message on removing standing water, preventing mosquito bites, dengue warning signs and where to seek care", "owner": "Incident communications", "timeframe": "Within 4 hours", "requires_approval": true}
       ]
     }
   },
   "condition_guidance": {
-    "ili": [
-      "Review respiratory testing demand and healthcare attendance pressure",
-      "Check antiviral and respiratory-support supply indicators"
-    ],
-    "age": [
-      "Review food, water and shared-location exposure reports",
-      "Check hydration-treatment and diagnostic capacity"
-    ],
-    "dengue": [
-      "Review rainfall and vector-activity context",
-      "Check diagnostic, fluid-management and vector-control readiness"
-    ]
+    "ili": ["Check whether fever, cough and breathing-illness visits are rising at the same facilities", "Confirm respiratory test delays and stocks of masks, oxygen supplies and key medicines"],
+    "age": ["Check whether vomiting and diarrhea reports point to the same school, care home, event, food source or water source", "Confirm stool-test capacity and stocks of rehydration and cleaning supplies"],
+    "dengue": ["Compare recent rain with reports of standing water and mosquito breeding sites", "Confirm dengue test kits, IV fluid supplies, referral capacity and mosquito-control team availability"]
   }
 }

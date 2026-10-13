@@ -23,9 +23,11 @@ flowchart TD
     A["Synthetic surveillance feeds"] --> B["Ingestion Agent"]
     B --> C["Signal Agent"]
     C --> D["Investigation Agent"]
-    D --> E["Forecast Agent"]
-    E --> F["Response Agent"]
-    F --> G["Evidence Briefing"]
+    C --> E["Forecast Agent"]
+    C --> F["Response Agent"]
+    D --> G["AI Summary Agent"]
+    E --> G
+    F --> G
     G --> H{"Incident Commander Gate"}
     H -->|Approve| I["Tracked response actions"]
     H -->|Dismiss| J["Decision recorded"]
@@ -57,8 +59,8 @@ Every execution returns a trace with component status and timing. Controlled res
 | Layer | Technology |
 |---|---|
 | Dashboard | React, TypeScript, Vite, Recharts, Lucide |
-| API | FastAPI, Pydantic, HTTPX |
-| Database | Supabase Postgres; SQLite-compatible local design boundary |
+| API and orchestration | FastAPI, Microsoft Agent Framework, Pydantic, HTTPX |
+| Database | Supabase Postgres |
 | AI summaries | Deterministic fallback, optional Groq or Hugging Face |
 | Playbooks | JSON, YAML, PDF, DOCX; optional Pinecone RAG |
 | Reports | ReportLab PDF generation |
@@ -76,7 +78,19 @@ playbooks/         Active response playbook and format guidance
 supabase/          Schema, policies, seed data, and migrations
 scripts/           Local setup and development commands
 DATASET_GUIDE.md   Dataset coverage and design notes
+WORKFLOWS_AND_FEATURES.md        Implemented workflows, features and boundaries
+AGENT_PROGRESS_AND_FEATURES.md  Agent implementation and configuration status
 ```
+
+## Microsoft Agent Framework orchestration
+
+The end-to-end surveillance pipeline runs as a Microsoft Agent Framework functional workflow. Ingestion, signal detection, investigation, forecasting, response-plan retrieval, briefing generation, and the Incident Commander gate are named framework steps. Investigation and forecasting retain their parallel execution, and the existing `/api/v1/workflow` response contract is unchanged.
+
+The framework is used for orchestration and observability; it does not replace the deterministic domain engines. Alert levels still come from transparent rules, approved actions still come from the versioned playbook, Pinecone remains supporting retrieval only, and controlled actions still require the existing human approval endpoint. No Azure resource is required for local execution. Deploying the workflow as a hosted Microsoft Foundry agent additionally requires Azure Developer CLI and a configured Foundry project.
+
+The project pins `agent-framework-core==1.21.0`. Microsoft currently marks the functional workflow API as experimental, so framework upgrades should be tested before changing this version.
+
+For concise implementation documentation, see [Workflows and Features](WORKFLOWS_AND_FEATURES.md) and [Agent Progress and Implemented Features](AGENT_PROGRESS_AND_FEATURES.md).
 
 ## Quick start
 
@@ -234,8 +248,8 @@ Backend variables:
 | `ALLOWED_ORIGINS` | Yes | Dashboard origins allowed by CORS |
 | `BACKEND_PORT` | No | Local API port used by launch scripts; `8001` or `8002`, default `8001` |
 | `AI_PROVIDER` | No | `deterministic`, `groq`, or `huggingface` |
-| `GROQ_API_KEY` and `GROQ_MODEL` | When using Groq | Groq summary generation. Recommended model: `llama-3.1-8b-instant` |
-| `HUGGINGFACE_TOKEN` and `HUGGINGFACE_MODEL` | When using Hugging Face | Hugging Face summary generation. Recommended model: `openai/gpt-oss-20b` |
+| `GROQ_API_KEY` and `GROQ_MODEL` | When using Groq | Groq structured summary generation |
+| `HUGGINGFACE_TOKEN` and `HUGGINGFACE_MODEL` | When using Hugging Face | Hugging Face structured summary generation |
 | `SMTP_HOST`, `SMTP_PORT` | For email alerts | SMTP server and port, commonly port 587 with TLS |
 | `SMTP_USERNAME`, `SMTP_PASSWORD` | When SMTP requires authentication | Server-only mail credentials or app password |
 | `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME` | For email alerts | Sender address and display name |

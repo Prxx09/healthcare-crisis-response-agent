@@ -8,3 +8,4 @@ pypdf==6.10.0
 reportlab==4.4.9
 tzdata==2026.5
 pinecone>=7.0.0,<8.0.0
+agent-framework-core==1.21.0

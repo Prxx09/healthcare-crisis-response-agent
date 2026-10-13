@@ -13,7 +13,7 @@ levels:
   monitor: &sample_actions
     - category: monitoring
       action: Review daily signals
-      owner: Surveillance analyst
+      owner: Epidemiology lead
       timeframe: Daily
       requires_approval: false
   investigate: *sample_actions
@@ -21,7 +21,7 @@ levels:
 condition_guidance:
   ili: [Review respiratory testing demand]
   age: [Review food and water exposure reports]
-  dengue: [Review rainfall and vector activity]
+  dengue: [Compare recent rain with reports of standing water and mosquito breeding sites]
 condition_actions:
   ili:
     monitor: []
@@ -30,7 +30,7 @@ condition_actions:
 PLAYBOOK_DATA_END
 ```
 
-Every severity level must contain at least one shared action. `condition_actions` is optional, but when present it should define disease-specific action lists for `ili`, `age`, and `dengue` across `monitor`, `investigate`, and `escalate`. Each action requires `category`, `action`, `owner`, `timeframe`, and a Boolean `requires_approval` value.
+Every severity level must contain at least one shared action. `condition_actions` is optional, but when present it should define disease-specific action lists for `ili`, `age`, and `dengue` across `monitor`, `investigate`, and `escalate`. Each action requires `category`, `action`, `owner`, `timeframe`, and a Boolean `requires_approval` value. Use plain language that identifies the disease, the item to check, the location or facility scope, and the expected output.
 
 ## Pinecone RAG
 
