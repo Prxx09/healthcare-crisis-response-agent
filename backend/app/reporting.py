@@ -62,7 +62,7 @@ def build_situation_report(alert: dict[str, Any], actions: list[dict[str, Any]])
     styles.add(ParagraphStyle(name="BodyMuted", parent=styles["BodyText"], fontSize=8.5, leading=12, textColor=MUTED))
     styles.add(ParagraphStyle(name="Cell", parent=styles["BodyText"], fontSize=8, leading=10))
 
-    region = alert["regions"]["name"]
+    hospital = alert["hospitals"]["name"]
     condition = alert["conditions"]["name"]
     evidence = alert.get("evidence_summary") or {}
     story: list[Any] = [
@@ -72,7 +72,7 @@ def build_situation_report(alert: dict[str, Any], actions: list[dict[str, Any]])
     ]
     metadata = [
         ["Alert", f"#{alert['id']}", "Status", alert["status"].replace("_", " ").title()],
-        ["Region", region, "Condition", condition],
+        ["Hospital", hospital, "Condition", condition],
         ["Analysis date", str(alert.get("analysis_date") or "-"), "Level", alert["alert_level"].title()],
         ["Rule version", alert["rule_version"], "Reviewed by", alert.get("reviewed_by") or "Pending"],
     ]

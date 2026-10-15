@@ -10,19 +10,19 @@ All records are synthetic and aggregated. The dataset contains no patient names,
 
 ## Coverage
 
-- **Time period:** 1 October 2025 to 30 September 2026 (365 days)
-- **Regions:** 4 simulated districts
+- **Time period:** 1 October 2025 to 13 October 2026 (378 days)
+- **Hospitals:** 4 simulated hospitals
 - **Conditions:** Influenza-like illness (ILI), acute gastroenteritis (AGE), and dengue
-- **Records:** 11,680 surveillance observations and 1,460 regional-context records
+- **Records:** 12,096 surveillance observations and 1,512 hospital operations snapshots
 
 ## Files and tables
 
 | File / table | Purpose |
 |---|---|
-| `regions.csv` / `regions` | Simulated region name and population. |
+| `hospitals.csv` / `hospitals` | Simulated hospital name and bed capacity. |
 | `conditions.csv` / `conditions` | The three monitored conditions and their syndrome groups. |
-| `surveillance_observations.csv` / `surveillance_observations` | Daily aggregate counts by condition, region, and signal source. |
-| `regional_context.csv` / `regional_context` | Daily contextual indicators such as rainfall, mobility, and temperature. |
+| `surveillance_observations.csv` / `surveillance_observations` | Daily aggregate counts by condition, hospital, and signal source. |
+| `hospital_context.csv` / `hospital_context` | Daily staffed and occupied beds, staffing coverage, and supply readiness. |
 | `alerts` | Stores future rule-based alerts and Incident Commander decisions. |
 
 ## Signal sources
@@ -30,15 +30,15 @@ All records are synthetic and aggregated. The dataset contains no patient names,
 - **Visits:** Syndrome-related visits or suspected-case counts.
 - **Laboratory positives:** Aggregate positive test counts.
 - **Pharmacy demand:** Aggregate demand indicator for ILI and AGE only.
-- **Regional context:** Synthetic rainfall, mobility, and temperature indicators that help add context to patterns.
+- **Hospital context:** Synthetic operations snapshots that describe capacity during a signal. These figures do not establish its cause.
 
 ## Designed scenarios
 
 The data includes three transparent patterns so the detection workflow can be demonstrated:
 
-1. A sustained ILI increase in Central District.
-2. A short AGE increase in Lakeside District.
-3. A gradual dengue increase in East District, aligned with higher rainfall context.
+1. A sustained ILI increase in Central Hospital.
+2. A short AGE increase in Lakeside Hospital.
+3. A gradual increase in suspected dengue visits at East Hospital.
 
 These patterns are illustrative signals, not simulated real-world outbreaks.
 

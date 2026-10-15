@@ -54,38 +54,38 @@ class SupabaseRepository:
         response.raise_for_status()
         return response.json()
 
-    async def get_regions(self) -> list[dict[str, Any]]:
-        return await self.get("regions", {"select": "id,code,name,population", "active": "eq.true", "order": "name"})
+    async def get_hospitals(self) -> list[dict[str, Any]]:
+        return await self.get("hospitals", {"select": "id,code,name,bed_capacity", "active": "eq.true", "order": "name"})
 
     async def get_conditions(self) -> list[dict[str, Any]]:
         return await self.get("conditions", {"select": "id,code,name,syndrome_group", "active": "eq.true", "order": "name"})
 
-    async def get_observations(self, start_date: str, end_date: str, region_code: str | None = None, condition_code: str | None = None) -> list[dict[str, Any]]:
+    async def get_observations(self, start_date: str, end_date: str, hospital_code: str | None = None, condition_code: str | None = None) -> list[dict[str, Any]]:
         params = {
-            "select": "observation_date,signal_source,observation_count,coverage_pct,data_quality,regions!inner(code,name),conditions!inner(code,name)",
+            "select": "observation_date,signal_source,observation_count,coverage_pct,data_quality,hospitals!inner(code,name),conditions!inner(code,name)",
             "observation_date": f"gte.{start_date}",
             "order": "observation_date.asc",
         }
         if end_date:
             params["and"] = f"(observation_date.lte.{end_date})"
-        if region_code:
-            params["regions.code"] = f"eq.{region_code}"
+        if hospital_code:
+            params["hospitals.code"] = f"eq.{hospital_code}"
         if condition_code:
             params["conditions.code"] = f"eq.{condition_code}"
         return await self.get("surveillance_observations", params)
 
-    async def get_regional_context(self, start_date: str, end_date: str, region_code: str) -> list[dict[str, Any]]:
-        return await self.get("regional_context", {
-            "select": "observation_date,rainfall_index,mobility_index,temperature_c,context_note,regions!inner(code,name)",
+    async def get_hospital_context(self, start_date: str, end_date: str, hospital_code: str) -> list[dict[str, Any]]:
+        return await self.get("hospital_context", {
+            "select": "observation_date,staffed_beds,occupied_beds,staffing_coverage_pct,supply_readiness_pct,context_note,hospitals!inner(code,name)",
             "observation_date": f"gte.{start_date}",
             "and": f"(observation_date.lte.{end_date})",
-            "regions.code": f"eq.{region_code}",
+            "hospitals.code": f"eq.{hospital_code}",
             "order": "observation_date.asc",
         })
 
     async def get_alerts(self, status: str | None = None) -> list[dict[str, Any]]:
         params = {
-            "select": "id,analysis_date,alert_level,evidence_summary,rule_version,status,reviewed_by,review_note,approved_at,created_at,regions!inner(code,name),conditions!inner(code,name)",
+            "select": "id,analysis_date,alert_level,evidence_summary,rule_version,status,reviewed_by,review_note,approved_at,created_at,hospitals!inner(code,name),conditions!inner(code,name)",
             "order": "created_at.desc",
         }
         if status:
@@ -94,7 +94,7 @@ class SupabaseRepository:
 
     async def get_alert(self, alert_id: int) -> dict[str, Any] | None:
         rows = await self.privileged_get("alerts", {
-            "select": "id,analysis_date,alert_level,evidence_summary,rule_version,status,reviewed_by,review_note,approved_at,created_at,regions!inner(code,name),conditions!inner(code,name)",
+            "select": "id,analysis_date,alert_level,evidence_summary,rule_version,status,reviewed_by,review_note,approved_at,created_at,hospitals!inner(code,name),conditions!inner(code,name)",
             "id": f"eq.{alert_id}",
             "limit": "1",
         })
@@ -102,7 +102,7 @@ class SupabaseRepository:
 
     async def get_alerts_for_date(self, analysis_date: str) -> list[dict[str, Any]]:
         return await self.privileged_get("alerts", {
-            "select": "id,analysis_date,alert_level,evidence_summary,rule_version,status,reviewed_by,review_note,approved_at,created_at,regions!inner(code,name),conditions!inner(code,name)",
+            "select": "id,analysis_date,alert_level,evidence_summary,rule_version,status,reviewed_by,review_note,approved_at,created_at,hospitals!inner(code,name),conditions!inner(code,name)",
             "analysis_date": f"eq.{analysis_date}",
             "alert_level": "in.(investigate,escalate)",
             "order": "alert_level.desc,created_at.desc",
@@ -124,7 +124,7 @@ class SupabaseRepository:
 
     async def get_actions(self, status: str | None = None, alert_id: int | None = None) -> list[dict[str, Any]]:
         params = {
-            "select": "id,alert_id,action_key,category,action_text,owner_role,assignee_name,timeframe,due_at,status,completion_note,completed_at,created_at,updated_at,alerts!inner(alert_level,analysis_date,regions!inner(code,name),conditions!inner(code,name))",
+            "select": "id,alert_id,action_key,category,action_text,owner_role,assignee_name,timeframe,due_at,status,completion_note,completed_at,created_at,updated_at,alerts!inner(alert_level,analysis_date,hospitals!inner(code,name),conditions!inner(code,name))",
             "order": "created_at.desc",
         }
         if status:

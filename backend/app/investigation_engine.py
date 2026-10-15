@@ -78,9 +78,12 @@ def investigate_cluster(observations: list[dict[str, Any]], context: list[dict[s
         return round(mean(values), 1) if values else None
 
     context_summary = {
-        "average_rainfall_index": average("rainfall_index"),
-        "average_mobility_index": average("mobility_index"),
-        "average_temperature_c": average("temperature_c"),
+        "average_bed_occupancy_pct": round(mean([
+            100 * float(row["occupied_beds"]) / float(row["staffed_beds"])
+            for row in context if row.get("staffed_beds") and row.get("occupied_beds") is not None
+        ]), 1) if any(row.get("staffed_beds") and row.get("occupied_beds") is not None for row in context) else None,
+        "average_staffing_coverage_pct": average("staffing_coverage_pct"),
+        "average_supply_readiness_pct": average("supply_readiness_pct"),
     }
     findings = [
         f"{len(by_source)} surveillance sources are available for correlation.",
@@ -94,8 +97,8 @@ def investigate_cluster(observations: list[dict[str, Any]], context: list[dict[s
                 f"{source['outlier_count']} unusual daily value(s); the source peak was "
                 f"{source['peak_count']} on {source['peak_date']}."
             )
-    if context_summary["average_rainfall_index"] is not None:
-        findings.append("Regional environmental and mobility indicators are included as supporting context, not causal evidence.")
+    if context_summary["average_bed_occupancy_pct"] is not None:
+        findings.append("Hospital capacity, staffing, and supply figures describe operational readiness; they do not establish the cause of an increase in visits.")
 
     return {
         "analysis_date": analysis_date.isoformat(),
@@ -104,6 +107,6 @@ def investigate_cluster(observations: list[dict[str, Any]], context: list[dict[s
         "peak_total": peak_total,
         "source_comparison": sources,
         "data_quality": dict(quality),
-        "regional_context": context_summary,
+        "hospital_context": context_summary,
         "findings": findings,
     }

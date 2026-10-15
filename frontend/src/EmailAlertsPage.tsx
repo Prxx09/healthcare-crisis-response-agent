@@ -79,7 +79,7 @@ export function EmailAlertsPage({ analysisDate }: Props) {
 
   return <section className="email-page">
     <div className="card scheduler-summary">
-      <div className="scheduler-heading"><div><CalendarClock size={24} /><div><h2>Email alert scheduler</h2><p>Consolidated reporting across all regions and conditions</p></div></div><span className={`scheduler-state ${dashboard.scheduler_status}`}><CheckCircle2 size={15} /> {dashboard.scheduler_status}</span></div>
+      <div className="scheduler-heading"><div><CalendarClock size={24} /><div><h2>Email alert scheduler</h2><p>Consolidated reporting across all hospitals and conditions</p></div></div><span className={`scheduler-state ${dashboard.scheduler_status}`}><CheckCircle2 size={15} /> {dashboard.scheduler_status}</span></div>
       <div className="scheduler-facts"><div><small>Next scheduled run</small><strong>{nextRun}</strong></div><div><small>Recipients</small><strong>{config.recipients.length} To · {config.cc.length} CC</strong></div><div><small>SMTP delivery</small><strong>{dashboard.smtp_configured ? "Configured" : "Configuration required"}</strong></div></div>
     </div>
 

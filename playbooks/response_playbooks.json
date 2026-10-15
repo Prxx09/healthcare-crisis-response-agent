@@ -62,7 +62,7 @@
     },
     "dengue": {
       "monitor": [
-        {"category": "mosquito breeding check", "action": "Compare recent rainfall and temperature with reports of standing water and mosquito breeding sites in the affected district", "owner": "Operations lead", "timeframe": "Within 1 business day", "requires_approval": false},
+        {"category": "mosquito breeding check", "action": "Check hospital grounds, drains and water containers for standing water; record any mosquito breeding sites for removal", "owner": "Operations lead", "timeframe": "Within 1 business day", "requires_approval": false},
         {"category": "test status", "action": "Confirm how many dengue tests are positive, pending or delayed at reporting laboratories", "owner": "Epidemiology lead", "timeframe": "Within 1 business day", "requires_approval": false},
         {"category": "fever visit review", "action": "Compare recent fever visits by locality and list the facilities reporting the largest increases", "owner": "Epidemiology lead", "timeframe": "Within 1 business day", "requires_approval": false}
       ],

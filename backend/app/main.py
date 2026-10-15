@@ -45,9 +45,9 @@ async def health() -> dict[str, str]:
     return {"status": "ok", "service": "healthcare-crisis-agent-api"}
 
 
-@app.get("/api/v1/regions")
-async def regions() -> list[dict]:
-    return await SupabaseRepository().get_regions()
+@app.get("/api/v1/hospitals")
+async def hospitals() -> list[dict]:
+    return await SupabaseRepository().get_hospitals()
 
 
 @app.get("/api/v1/conditions")
@@ -70,13 +70,13 @@ async def data_availability() -> dict[str, str]:
 async def observations(
     start_date: date = Query(...),
     end_date: date = Query(...),
-    region_code: str | None = None,
+    hospital_code: str | None = None,
     condition_code: str | None = None,
 ) -> list[dict]:
     if end_date < start_date:
         raise HTTPException(status_code=400, detail="end_date must be on or after start_date")
     try:
-        return await SupabaseRepository().get_observations(start_date.isoformat(), end_date.isoformat(), region_code, condition_code)
+        return await SupabaseRepository().get_observations(start_date.isoformat(), end_date.isoformat(), hospital_code, condition_code)
     except httpx.HTTPError as error:
         raise HTTPException(status_code=502, detail="Unable to read surveillance data") from error
 
@@ -100,14 +100,14 @@ async def signals(analysis_date: date = Query(default=date(2026, 9, 30)), baseli
 @app.get("/api/v1/forecast")
 async def forecast(
     analysis_date: date = Query(...),
-    region_code: str = Query(...),
+    hospital_code: str = Query(...),
     condition_code: str = Query(...),
     horizon_days: int = Query(default=7, ge=3, le=14),
 ) -> dict:
     start_date = analysis_date - timedelta(days=15)
     try:
         rows = await SupabaseRepository().get_observations(
-            start_date.isoformat(), analysis_date.isoformat(), region_code, condition_code
+            start_date.isoformat(), analysis_date.isoformat(), hospital_code, condition_code
         )
         return build_scenarios(rows, analysis_date, horizon_days)
     except ValueError as error:
@@ -119,7 +119,7 @@ async def forecast(
 @app.get("/api/v1/forecast/briefing")
 async def forecast_briefing(
     analysis_date: date = Query(...),
-    region_code: str = Query(...),
+    hospital_code: str = Query(...),
     condition_code: str = Query(...),
     horizon_days: int = Query(default=7, ge=3, le=14),
 ) -> dict:
@@ -127,15 +127,15 @@ async def forecast_briefing(
     repository = SupabaseRepository()
     try:
         rows = await repository.get_observations(
-            start_date.isoformat(), analysis_date.isoformat(), region_code, condition_code
+            start_date.isoformat(), analysis_date.isoformat(), hospital_code, condition_code
         )
         forecast_result = build_scenarios(rows, analysis_date, horizon_days)
-        region_name = rows[0]["regions"]["name"] if rows else region_code
+        hospital_name = rows[0]["hospitals"]["name"] if rows else hospital_code
         condition_name = rows[0]["conditions"]["name"] if rows else condition_code
         return await generate_forecast_briefing(
             {
                 "analysis_date": analysis_date.isoformat(),
-                "region_name": region_name,
+                "hospital_name": hospital_name,
                 "condition_name": condition_name,
                 "forecast": forecast_result,
             },
@@ -150,7 +150,7 @@ async def forecast_briefing(
 @app.get("/api/v1/investigation")
 async def investigation(
     analysis_date: date = Query(...),
-    region_code: str = Query(...),
+    hospital_code: str = Query(...),
     condition_code: str = Query(...),
     window_days: int = Query(default=14, ge=7, le=30),
 ) -> dict:
@@ -158,8 +158,8 @@ async def investigation(
     repository = SupabaseRepository()
     try:
         rows, context = await asyncio.gather(
-            repository.get_observations(start_date.isoformat(), analysis_date.isoformat(), region_code, condition_code),
-            repository.get_regional_context(start_date.isoformat(), analysis_date.isoformat(), region_code),
+            repository.get_observations(start_date.isoformat(), analysis_date.isoformat(), hospital_code, condition_code),
+            repository.get_hospital_context(start_date.isoformat(), analysis_date.isoformat(), hospital_code),
         )
         return investigate_cluster(rows, context, analysis_date)
     except ValueError as error:
@@ -182,32 +182,32 @@ async def response_plan(
 @app.get("/api/v1/briefing")
 async def briefing(
     analysis_date: date = Query(...),
-    region_code: str = Query(...),
+    hospital_code: str = Query(...),
     condition_code: str = Query(...),
 ) -> dict:
     start_date = analysis_date - timedelta(days=28)
     repository = SupabaseRepository()
     try:
         rows, context = await asyncio.gather(
-            repository.get_observations(start_date.isoformat(), analysis_date.isoformat(), region_code, condition_code),
-            repository.get_regional_context((analysis_date - timedelta(days=13)).isoformat(), analysis_date.isoformat(), region_code),
+            repository.get_observations(start_date.isoformat(), analysis_date.isoformat(), hospital_code, condition_code),
+            repository.get_hospital_context((analysis_date - timedelta(days=13)).isoformat(), analysis_date.isoformat(), hospital_code),
         )
         clusters = summarise_clusters(detect_source_signals(rows, analysis_date, 28))
-        cluster = next((item for item in clusters if item["region_code"] == region_code and item["condition_code"] == condition_code), None)
+        cluster = next((item for item in clusters if item["hospital_code"] == hospital_code and item["condition_code"] == condition_code), None)
         investigation_rows = [row for row in rows if row["observation_date"] >= (analysis_date - timedelta(days=13)).isoformat()]
         investigation_result = investigate_cluster(investigation_rows, context, analysis_date)
         forecast_result = build_scenarios(rows, analysis_date, 7)
-        region_name = rows[0]["regions"]["name"] if rows else region_code
+        hospital_name = rows[0]["hospitals"]["name"] if rows else hospital_code
         condition_name = rows[0]["conditions"]["name"] if rows else condition_code
         response_plan_result = await select_response_plan_with_rag(
             settings,
             condition_code,
             cluster["level"],
-            query_context=f"Region {region_name}; analysis date {analysis_date.isoformat()}",
+            query_context=f"Hospital {hospital_name}; analysis date {analysis_date.isoformat()}",
         ) if cluster else None
         evidence = {
             "analysis_date": analysis_date.isoformat(),
-            "region_name": region_name,
+            "hospital_name": hospital_name,
             "condition_name": condition_name,
             "cluster": cluster,
             "investigation": investigation_result,
@@ -224,23 +224,23 @@ async def briefing(
 @app.get("/api/v1/briefing/aggregate")
 async def aggregate_briefing(
     analysis_date: date = Query(...),
-    region_code: str | None = None,
+    hospital_code: str | None = None,
     condition_code: str | None = None,
 ) -> dict:
     start_date = analysis_date - timedelta(days=28)
     repository = SupabaseRepository()
     try:
         rows = await repository.get_observations(
-            start_date.isoformat(), analysis_date.isoformat(), region_code, condition_code
+            start_date.isoformat(), analysis_date.isoformat(), hospital_code, condition_code
         )
         clusters = summarise_clusters(detect_source_signals(rows, analysis_date, 28))
-        region_name = rows[0]["regions"]["name"] if region_code and rows else "All regions"
+        hospital_name = rows[0]["hospitals"]["name"] if hospital_code and rows else "All hospitals"
         condition_name = rows[0]["conditions"]["name"] if condition_code and rows else "All diseases"
         return await generate_briefing({
             "aggregate": True,
             "analysis_date": analysis_date.isoformat(),
-            "scope": f"{condition_name} · {region_name}",
-            "region_name": region_name,
+            "scope": f"{condition_name} · {hospital_name}",
+            "hospital_name": hospital_name,
             "condition_name": condition_name,
             "clusters": clusters,
         }, settings)
@@ -251,10 +251,10 @@ async def aggregate_briefing(
 @app.get("/api/v1/workflow")
 async def workflow(
     analysis_date: date = Query(...),
-    region_code: str = Query(...),
+    hospital_code: str = Query(...),
     condition_code: str = Query(...),
 ) -> dict:
-    return await run_workflow(SupabaseRepository(), settings, analysis_date, region_code, condition_code)
+    return await run_workflow(SupabaseRepository(), settings, analysis_date, hospital_code, condition_code)
 
 
 @app.get("/api/v1/playbooks")
@@ -333,7 +333,7 @@ async def generate_alerts(request: AlertGenerationRequest) -> dict:
     repository = SupabaseRepository()
     try:
         generation = await generate_eligible_alerts(
-            repository, request.analysis_date, request.baseline_days, request.region_code, request.condition_code
+            repository, request.analysis_date, request.baseline_days, request.hospital_code, request.condition_code
         )
         created_alerts = generation.pop("created_alerts", [])
         notification_result = {"sent": 0, "failed": 0, "skipped": 0}

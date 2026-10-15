@@ -64,7 +64,7 @@ def _build_email(alerts: list[dict[str, Any]], analysis_date: date, settings: Se
         alerts,
         key=lambda alert: (
             -LEVEL_RANK[alert["alert_level"]],
-            alert["regions"]["name"],
+            alert["hospitals"]["name"],
             alert["conditions"]["name"],
         ),
     )
@@ -74,7 +74,7 @@ def _build_email(alerts: list[dict[str, Any]], analysis_date: date, settings: Se
         evidence = alert.get("evidence_summary", {})
         source_keys = evidence.get("supporting_sources", [])
         sources = ", ".join(SOURCE_LABELS.get(source, source.replace("_", " ").title()) for source in source_keys) or "Not recorded"
-        region = alert["regions"]["name"]
+        hospital = alert["hospitals"]["name"]
         condition = alert["conditions"]["name"]
         level = alert["alert_level"]
         level_color = "#a43f2c" if level == "escalate" else "#a45119"
@@ -100,7 +100,7 @@ def _build_email(alerts: list[dict[str, Any]], analysis_date: date, settings: Se
               <tr><td style="padding:20px 22px 12px;">
                 <span style="display:inline-block;padding:5px 9px;border-radius:13px;background:{level_background};color:{level_color};font-size:10px;font-weight:bold;letter-spacing:.6px;">{html.escape(level.upper())}</span>
                 <h2 style="margin:12px 0 5px;font-size:18px;line-height:25px;color:#17324a;">{html.escape(condition)}</h2>
-                <p style="margin:0;color:#65798b;font-size:13px;line-height:19px;">{html.escape(region)} &middot; Alert #{alert['id']}</p>
+                <p style="margin:0;color:#65798b;font-size:13px;line-height:19px;">{html.escape(hospital)} &middot; Alert #{alert['id']}</p>
               </td></tr>
               <tr><td style="padding:0 22px 16px;">
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
@@ -110,14 +110,14 @@ def _build_email(alerts: list[dict[str, Any]], analysis_date: date, settings: Se
               </td></tr>
             </table>"""
         )
-        text_rows.append(f"- {level.title()}: {condition} in {region}; supporting sources: {sources}")
-    regions_affected = len({alert["regions"]["name"] for alert in alerts})
+        text_rows.append(f"- {level.title()}: {condition} in {hospital}; supporting sources: {sources}")
+    hospitals_affected = len({alert["hospitals"]["name"] for alert in alerts})
     conditions_affected = len({alert["conditions"]["name"] for alert in alerts})
     review_url = _page_url(settings, "/alert-review")
     safe_url = html.escape(review_url, quote=True)
     text_body = (
         "CRISISWATCH CONSOLIDATED THRESHOLD REPORT\n\n"
-        f"CrisisWatch detected {len(alerts)} corroborated threshold alert(s) across all configured regions and conditions for {formatted_date}.\n\n"
+        f"CrisisWatch detected {len(alerts)} corroborated threshold alert(s) across all configured hospitals and conditions for {formatted_date}.\n\n"
         + "\n".join(text_rows)
         + f"\n\nReview the alerts: {review_url}\n\nHuman review is required before response actions are issued."
     )
@@ -131,13 +131,13 @@ def _build_email(alerts: list[dict[str, Any]], analysis_date: date, settings: Se
           <tr><td style="padding:30px 34px 22px;">
             <span style="display:inline-block;padding:6px 10px;border-radius:14px;background:#e8f1f7;color:#175c8f;font-size:11px;font-weight:bold;letter-spacing:.7px;">CONSOLIDATED SURVEILLANCE REPORT</span>
             <h1 style="margin:16px 0 10px;font-size:27px;line-height:35px;color:#16324a;">CrisisWatch threshold alert</h1>
-            <p style="margin:0;font-size:15px;line-height:23px;color:#526779;">Corroborated signals detected across the complete surveillance scope for <strong style="color:#16324a;">{html.escape(formatted_date)}</strong>. This report includes all configured regions and conditions and is independent of dashboard filters.</p>
+            <p style="margin:0;font-size:15px;line-height:23px;color:#526779;">Corroborated signals detected across the complete surveillance scope for <strong style="color:#16324a;">{html.escape(formatted_date)}</strong>. This report includes all configured hospitals and conditions and is independent of dashboard filters.</p>
           </td></tr>
           <tr><td style="padding:0 34px 24px;">
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f6f9fb;border:1px solid #e0e8ed;border-radius:8px;">
               <tr>
                 <td width="33.33%" align="center" style="padding:17px 8px;border-right:1px solid #e0e8ed;"><div style="font-size:24px;font-weight:bold;color:#17324a;">{len(alerts)}</div><div style="margin-top:4px;font-size:10px;color:#718396;text-transform:uppercase;letter-spacing:.5px;">Threshold alerts</div></td>
-                <td width="33.33%" align="center" style="padding:17px 8px;border-right:1px solid #e0e8ed;"><div style="font-size:24px;font-weight:bold;color:#17324a;">{regions_affected}</div><div style="margin-top:4px;font-size:10px;color:#718396;text-transform:uppercase;letter-spacing:.5px;">Regions affected</div></td>
+                <td width="33.33%" align="center" style="padding:17px 8px;border-right:1px solid #e0e8ed;"><div style="font-size:24px;font-weight:bold;color:#17324a;">{hospitals_affected}</div><div style="margin-top:4px;font-size:10px;color:#718396;text-transform:uppercase;letter-spacing:.5px;">Hospitals affected</div></td>
                 <td width="33.33%" align="center" style="padding:17px 8px;"><div style="font-size:24px;font-weight:bold;color:#17324a;">{conditions_affected}</div><div style="margin-top:4px;font-size:10px;color:#718396;text-transform:uppercase;letter-spacing:.5px;">Conditions affected</div></td>
               </tr>
             </table>
@@ -147,7 +147,7 @@ def _build_email(alerts: list[dict[str, Any]], analysis_date: date, settings: Se
           <tr><td align="center" style="padding:12px 34px 30px;background:#f8fafb;">
             <a href="{safe_url}" style="display:inline-block;background:#175c8f;color:#ffffff;text-decoration:none;font-size:15px;font-weight:bold;padding:13px 22px;border-radius:7px;">Open alert review</a>
           </td></tr>
-          <tr><td style="padding:18px 34px;background:#f3f6f8;border-top:1px solid #e3eaee;text-align:center;color:#7a8997;font-size:11px;line-height:17px;">Scope: all configured regions and conditions.<br>Decision support only. Human review is required before response actions are issued.</td></tr>
+          <tr><td style="padding:18px 34px;background:#f3f6f8;border-top:1px solid #e3eaee;text-align:center;color:#7a8997;font-size:11px;line-height:17px;">Scope: all configured hospitals and conditions.<br>Decision support only. Human review is required before response actions are issued.</td></tr>
         </table>
       </td></tr>
     </table>
@@ -181,7 +181,7 @@ def _build_no_alert_email(analysis_date: date, settings: Settings) -> tuple[str,
           <tr><td style="padding:30px 34px 20px;">
             <span style="display:inline-block;padding:6px 10px;border-radius:14px;background:#e7f5f1;color:#246f61;font-size:11px;font-weight:bold;letter-spacing:.7px;">DAILY STATUS</span>
             <h1 style="margin:16px 0 10px;font-size:26px;line-height:34px;color:#16324a;">No threshold crossings detected</h1>
-            <p style="margin:0;font-size:15px;line-height:23px;color:#526779;">CrisisWatch completed its scheduled review for <strong style="color:#16324a;">{safe_date}</strong>. Across all configured regions and conditions, no monitored signals crossed the configured review threshold.</p>
+            <p style="margin:0;font-size:15px;line-height:23px;color:#526779;">CrisisWatch completed its scheduled review for <strong style="color:#16324a;">{safe_date}</strong>. Across all configured hospitals and conditions, no monitored signals crossed the configured review threshold.</p>
           </td></tr>
           <tr><td style="padding:0 34px 22px;">
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f1f8f5;border:1px solid #cfe5dc;border-radius:8px;">
@@ -207,7 +207,7 @@ def _build_no_alert_email(analysis_date: date, settings: Settings) -> tuple[str,
           <tr><td align="center" style="padding:0 34px 30px;">
             <a href="{safe_url}" style="display:inline-block;background:#175c8f;color:#ffffff;text-decoration:none;font-size:15px;font-weight:bold;padding:13px 22px;border-radius:7px;">Open surveillance dashboard</a>
           </td></tr>
-          <tr><td style="padding:18px 34px;background:#f7f9fb;border-top:1px solid #e5ebef;text-align:center;color:#7a8997;font-size:11px;line-height:17px;">Scope: all configured regions and conditions.<br>Automated operational status from CrisisWatch. Human oversight remains required.</td></tr>
+          <tr><td style="padding:18px 34px;background:#f7f9fb;border-top:1px solid #e5ebef;text-align:center;color:#7a8997;font-size:11px;line-height:17px;">Scope: all configured hospitals and conditions.<br>Automated operational status from CrisisWatch. Human oversight remains required.</td></tr>
         </table>
       </td></tr>
     </table>
@@ -285,10 +285,10 @@ async def send_incident_review_notifications(
     for alert in alerts:
         evidence = alert.get("evidence_summary") or {}
         condition = str(evidence.get("condition") or "Unknown condition")
-        region = str(evidence.get("region") or "Unknown region")
+        hospital = str(evidence.get("hospital") or "Unknown hospital")
         level = str(alert.get("alert_level") or evidence.get("level") or "investigate")
         analysis_date = str(alert.get("analysis_date") or evidence.get("analysis_date") or "Not recorded")
-        subject = f"CrisisWatch review required: {condition} in {region}"
+        subject = f"CrisisWatch review required: {condition} in {hospital}"
         record = {
             "alert_id": alert["id"],
             "recipient": recipient or None,
@@ -325,14 +325,14 @@ async def send_incident_review_notifications(
                     f'<tr><td colspan="2" style="padding:10px 0;border-top:1px solid #e8eef2;font-size:13px;color:#526779;">{html.escape(source_text)}</td></tr>'
                 )
             safe_condition = html.escape(condition)
-            safe_region = html.escape(region)
+            safe_hospital = html.escape(hospital)
             safe_level = html.escape(level.title())
             safe_analysis_date = html.escape(analysis_date)
             safe_review_url = html.escape(review_url, quote=True)
             text_body = (
                 "CRISISWATCH ALERT REVIEW REQUIRED\n\n"
                 "A corroborated surveillance signal has been submitted for Incident Commander review.\n\n"
-                f"Condition: {condition}\nRegion: {region}\nLevel: {level.title()}\n"
+                f"Condition: {condition}\nHospital: {hospital}\nLevel: {level.title()}\n"
                 f"Analysis date: {analysis_date}\nSupporting sources: {source_text}\nAlert: #{alert['id']}\n\n"
                 f"Open alert review: {review_url}\n\n"
                 "No response task is issued until an Incident Commander records a decision."
@@ -354,7 +354,7 @@ async def send_incident_review_notifications(
               <tr><td style="padding:18px 20px;">
                 <div style="font-size:11px;font-weight:bold;letter-spacing:.7px;color:#7d6b5d;margin-bottom:7px;">{safe_level.upper()} &middot; ALERT #{alert['id']}</div>
                 <div style="font-size:19px;font-weight:bold;line-height:26px;color:#16324a;">{safe_condition}</div>
-                <div style="margin-top:4px;font-size:14px;color:#65798b;">{safe_region}</div>
+                <div style="margin-top:4px;font-size:14px;color:#65798b;">{safe_hospital}</div>
               </td></tr>
             </table>
           </td></tr>
@@ -411,11 +411,11 @@ async def run_email_alert(
         analysis_date = date.fromisoformat(latest)
 
     # Email reports always evaluate the complete surveillance scope. Dashboard
-    # region and condition filters are intentionally not accepted here.
+    # hospital and condition filters are intentionally not accepted here.
     await generate_eligible_alerts(
         repository,
         analysis_date,
-        region_code=None,
+        hospital_code=None,
         condition_code=None,
     )
     alerts = await repository.get_alerts_for_date(analysis_date.isoformat())
@@ -474,14 +474,14 @@ async def send_task_owner_notifications(
             continue
         try:
             recipient = normalize_emails([recipient])[0]
-            region = alert["regions"]["name"]
+            hospital = alert["hospitals"]["name"]
             condition = alert["conditions"]["name"]
             due = _format_due_at(action.get("due_at"), config.get("timezone") or "UTC")
             text_body = (
                 "NEW CRISISWATCH RESPONSE TASK\n\n"
                 f"A response task has been assigned to {owner_role} following Incident Commander approval.\n\n"
                 f"TASK\n{action['action_text']}\n\n"
-                f"Condition: {condition}\nRegion: {region}\nOwner: {owner_role}\n"
+                f"Condition: {condition}\nHospital: {hospital}\nOwner: {owner_role}\n"
                 f"Timeframe: {action['timeframe']}\nDue: {due}\nAlert: #{alert['id']}\n\n"
                 f"Open the action tracker: {_page_url(settings, '/action-tracker')}\n\n"
                 "This is an operational notification from CrisisWatch."
@@ -489,7 +489,7 @@ async def send_task_owner_notifications(
             safe_owner = html.escape(owner_role)
             safe_task = html.escape(action["action_text"])
             safe_condition = html.escape(condition)
-            safe_region = html.escape(region)
+            safe_hospital = html.escape(hospital)
             safe_timeframe = html.escape(action["timeframe"])
             safe_due = html.escape(due)
             safe_url = html.escape(_page_url(settings, "/action-tracker"), quote=True)
@@ -517,7 +517,7 @@ async def send_task_owner_notifications(
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border:1px solid #e1e8ed;border-radius:8px;">
               <tr>
                 <td width="50%" style="padding:15px 18px;border-bottom:1px solid #e8eef2;border-right:1px solid #e8eef2;"><div style="font-size:11px;color:#748699;text-transform:uppercase;margin-bottom:5px;">Condition</div><div style="font-size:14px;font-weight:bold;">{safe_condition}</div></td>
-                <td width="50%" style="padding:15px 18px;border-bottom:1px solid #e8eef2;"><div style="font-size:11px;color:#748699;text-transform:uppercase;margin-bottom:5px;">Region</div><div style="font-size:14px;font-weight:bold;">{safe_region}</div></td>
+                <td width="50%" style="padding:15px 18px;border-bottom:1px solid #e8eef2;"><div style="font-size:11px;color:#748699;text-transform:uppercase;margin-bottom:5px;">Hospital</div><div style="font-size:14px;font-weight:bold;">{safe_hospital}</div></td>
               </tr>
               <tr>
                 <td width="50%" style="padding:15px 18px;border-bottom:1px solid #e8eef2;border-right:1px solid #e8eef2;"><div style="font-size:11px;color:#748699;text-transform:uppercase;margin-bottom:5px;">Owner</div><div style="font-size:14px;font-weight:bold;">{safe_owner}</div></td>

@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 class AlertGenerationRequest(BaseModel):
     analysis_date: date
     baseline_days: int = Field(default=28, ge=14, le=60)
-    region_code: str | None = None
+    hospital_code: str | None = None
     condition_code: str | None = None
 
 

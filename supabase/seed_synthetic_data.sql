@@ -1,13 +1,13 @@
 -- Synthetic, aggregate data seed from 1 October 2025 through 13 October 2026.
--- Keeps four regions constant and includes transparent threshold-crossing demonstration scenarios.
+-- Keeps four hospitals constant and includes transparent threshold-crossing demonstration scenarios.
 
-insert into public.regions (code, name, population, active)
+insert into public.hospitals (code, name, bed_capacity, active)
 values
-  ('north_district', 'North District', 420000, true),
-  ('central_district', 'Central District', 610000, true),
-  ('east_district', 'East District', 385000, true),
-  ('lakeside_district', 'Lakeside District', 470000, true)
-on conflict (code) do update set name = excluded.name, population = excluded.population, active = excluded.active;
+  ('north_hospital', 'North Hospital', 120, true),
+  ('central_hospital', 'Central Hospital', 180, true),
+  ('east_hospital', 'East Hospital', 110, true),
+  ('lakeside_hospital', 'Lakeside Hospital', 140, true)
+on conflict (code) do update set name = excluded.name, bed_capacity = excluded.bed_capacity, active = excluded.active;
 
 insert into public.conditions (code, name, syndrome_group, active)
 values
@@ -26,22 +26,24 @@ with days as (
 ), numbered_days as (
   select observation_date, row_number() over (order by observation_date) - 1 as day_index from days
 )
-insert into public.regional_context (observation_date, region_id, rainfall_index, mobility_index, temperature_c, context_note)
+insert into public.hospital_context (observation_date, hospital_id, staffed_beds, occupied_beds, staffing_coverage_pct, supply_readiness_pct, context_note)
 select
   d.observation_date,
   r.id,
-  greatest(0, round(30 + 18 * sin(2 * pi() * d.day_index / 90.0) + 8 * region_order + 4 * sin(d.day_index * 1.7))),
-  round(100 + 6 * sin(2 * pi() * d.day_index / 7.0) + 2 * sin(d.day_index * 2.3)),
-  round((26 + 2.2 * sin(2 * pi() * d.day_index / 90.0) + 0.4 * region_order)::numeric, 1),
-  'Synthetic regional context'
+  r.staffed_beds,
+  least(r.staffed_beds, greatest(0, round(r.staffed_beds * (0.65 + 0.08 * sin(2 * pi() * d.day_index / 90.0) + 0.02 * sin(d.day_index * 1.7))))::integer),
+  round((90 + 4 * sin(2 * pi() * d.day_index / 7.0) + 2 * sin(d.day_index * 2.3))::numeric, 1),
+  round((88 + 3 * sin(2 * pi() * d.day_index / 90.0) + 2 * sin(d.day_index * 1.1))::numeric, 1),
+  'Synthetic hospital operations snapshot'
 from numbered_days d
 cross join lateral (
-  select id, code, row_number() over (order by code) - 1 as region_order from public.regions
+  select id, greatest(1, round(bed_capacity * 0.85))::integer as staffed_beds from public.hospitals
 ) r
-on conflict (observation_date, region_id) do update
-set rainfall_index = excluded.rainfall_index,
-    mobility_index = excluded.mobility_index,
-    temperature_c = excluded.temperature_c,
+on conflict (observation_date, hospital_id) do update
+set staffed_beds = excluded.staffed_beds,
+    occupied_beds = excluded.occupied_beds,
+    staffing_coverage_pct = excluded.staffing_coverage_pct,
+    supply_readiness_pct = excluded.supply_readiness_pct,
     context_note = excluded.context_note;
 
 with days as (
@@ -52,22 +54,22 @@ with days as (
   select
     d.observation_date,
     d.day_index,
-    r.id as region_id,
-    r.code as region_code,
+    r.id as hospital_id,
+    r.code as hospital_code,
     c.id as condition_id,
     c.code as condition_code,
     greatest(0, round((
       (case c.code when 'ili' then 34 when 'age' then 22 else 8 end)
-      + (case r.code when 'central_district' then 4 when 'east_district' then 2 when 'lakeside_district' then 3 else 0 end)
+      + (case r.code when 'central_hospital' then 4 when 'east_hospital' then 2 when 'lakeside_hospital' then 3 else 0 end)
       + 2 * sin(d.day_index * 1.7)
     ) * case c.code
       when 'ili' then 1.0 + 0.10 * sin(2 * pi() * d.day_index / 7.0)
       when 'age' then 1.0 + 0.05 * sin(2 * pi() * d.day_index / 7.0)
-      else 1.0 + 0.012 * greatest(0, 30 + 18 * sin(2 * pi() * d.day_index / 90.0))
+      else 1.0 + 0.10 * sin(2 * pi() * d.day_index / 90.0)
     end * case
-      when c.code = 'ili' and r.code = 'central_district' and d.day_index between 62 and 75 then 1.0 + 0.10 * (d.day_index - 61)
-      when c.code = 'age' and r.code = 'lakeside_district' and d.day_index between 35 and 42 then 1.0 + 0.18 * least(d.day_index - 34, 5)
-      when c.code = 'dengue' and r.code = 'east_district' and d.day_index >= 68 then 1.0 + 0.06 * (d.day_index - 67)
+      when c.code = 'ili' and r.code = 'central_hospital' and d.day_index between 62 and 75 then 1.0 + 0.10 * (d.day_index - 61)
+      when c.code = 'age' and r.code = 'lakeside_hospital' and d.day_index between 35 and 42 then 1.0 + 0.18 * least(d.day_index - 34, 5)
+      when c.code = 'dengue' and r.code = 'east_hospital' and d.day_index >= 68 then 1.0 + 0.06 * (d.day_index - 67)
       else 1.0
     end * case
       -- Small lead-in increases make the demonstration trend visible while
@@ -75,38 +77,38 @@ with days as (
       when d.observation_date between date '2026-10-10' and date '2026-10-12'
         and (
           (r.code, c.code) in (
-            ('central_district', 'ili'),
-            ('central_district', 'dengue'),
-            ('east_district', 'age'),
-            ('east_district', 'dengue'),
-            ('lakeside_district', 'age'),
-            ('lakeside_district', 'dengue'),
-            ('north_district', 'ili'),
-            ('north_district', 'dengue')
+            ('central_hospital', 'ili'),
+            ('central_hospital', 'dengue'),
+            ('east_hospital', 'age'),
+            ('east_hospital', 'dengue'),
+            ('lakeside_hospital', 'age'),
+            ('lakeside_hospital', 'dengue'),
+            ('north_hospital', 'ili'),
+            ('north_hospital', 'dengue')
           )
         ) then 1.15 + 0.10 * (d.observation_date - date '2026-10-10')
-      when d.observation_date = date '2026-10-13' and r.code = 'central_district' and c.code = 'ili' then 2.8
-      when d.observation_date = date '2026-10-13' and r.code = 'central_district' and c.code = 'dengue' then 3.2
-      when d.observation_date = date '2026-10-13' and r.code = 'east_district' and c.code = 'age' then 3.0
-      when d.observation_date = date '2026-10-13' and r.code = 'east_district' and c.code = 'dengue' then 2.8
-      when d.observation_date = date '2026-10-13' and r.code = 'lakeside_district' and c.code = 'age' then 2.7
-      when d.observation_date = date '2026-10-13' and r.code = 'lakeside_district' and c.code = 'dengue' then 2.4
-      when d.observation_date = date '2026-10-13' and r.code = 'north_district' and c.code = 'ili' then 2.6
-      when d.observation_date = date '2026-10-13' and r.code = 'north_district' and c.code = 'dengue' then 3.4
+      when d.observation_date = date '2026-10-13' and r.code = 'central_hospital' and c.code = 'ili' then 2.8
+      when d.observation_date = date '2026-10-13' and r.code = 'central_hospital' and c.code = 'dengue' then 3.2
+      when d.observation_date = date '2026-10-13' and r.code = 'east_hospital' and c.code = 'age' then 3.0
+      when d.observation_date = date '2026-10-13' and r.code = 'east_hospital' and c.code = 'dengue' then 2.8
+      when d.observation_date = date '2026-10-13' and r.code = 'lakeside_hospital' and c.code = 'age' then 2.7
+      when d.observation_date = date '2026-10-13' and r.code = 'lakeside_hospital' and c.code = 'dengue' then 2.4
+      when d.observation_date = date '2026-10-13' and r.code = 'north_hospital' and c.code = 'ili' then 2.6
+      when d.observation_date = date '2026-10-13' and r.code = 'north_hospital' and c.code = 'dengue' then 3.4
       else 1.0
     end
   ))::integer as visits
   from numbered_days d
-  cross join public.regions r
+  cross join public.hospitals r
   cross join public.conditions c
 )
 insert into public.surveillance_observations (
-  observation_date, region_id, condition_id, signal_source, observation_count,
+  observation_date, hospital_id, condition_id, signal_source, observation_count,
   coverage_pct, data_quality, source_note, synthetic_run_id
 )
 select
   b.observation_date,
-  b.region_id,
+  b.hospital_id,
   b.condition_id,
   x.signal_source,
   x.observation_count,
@@ -122,7 +124,7 @@ cross join lateral (
     ('pharmacy_demand', greatest(0, round(b.visits * case b.condition_code when 'ili' then 1.45 else 1.20 end))::integer, 90::numeric, 'Synthetic pharmacy demand index')
 ) as x(signal_source, observation_count, coverage_pct, source_note)
 where b.condition_code in ('ili', 'age') or x.signal_source <> 'pharmacy_demand'
-on conflict (observation_date, region_id, condition_id, signal_source, synthetic_run_id) do update
+on conflict (observation_date, hospital_id, condition_id, signal_source, synthetic_run_id) do update
 set observation_count = excluded.observation_count,
     coverage_pct = excluded.coverage_pct,
     data_quality = excluded.data_quality,

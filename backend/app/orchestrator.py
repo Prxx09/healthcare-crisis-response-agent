@@ -26,7 +26,7 @@ class CrisisWorkflowRequest:
     repository: SupabaseRepository
     settings: Settings
     analysis_date: date
-    region_code: str
+    hospital_code: str
     condition_code: str
 
 
@@ -56,7 +56,7 @@ def _scope_replay_key(payload: dict[str, Any]) -> str:
 
     return (
         f"{payload['analysis_date'].isoformat()}|"
-        f"{payload['region_code']}|{payload['condition_code']}"
+        f"{payload['hospital_code']}|{payload['condition_code']}"
     )
 
 
@@ -67,12 +67,12 @@ async def ingestion_agent(request: CrisisWorkflowRequest) -> dict[str, Any]:
     try:
         rows, context = await asyncio.gather(
             request.repository.get_observations(
-                start_date.isoformat(), request.analysis_date.isoformat(), request.region_code, request.condition_code
+                start_date.isoformat(), request.analysis_date.isoformat(), request.hospital_code, request.condition_code
             ),
-            request.repository.get_regional_context(
+            request.repository.get_hospital_context(
                 (request.analysis_date - timedelta(days=13)).isoformat(),
                 request.analysis_date.isoformat(),
-                request.region_code,
+                request.hospital_code,
             ),
         )
         if not rows:
@@ -118,7 +118,7 @@ async def signal_agent(payload: dict[str, Any]) -> dict[str, Any]:
             (
                 item
                 for item in clusters
-                if item["region_code"] == payload["region_code"]
+                if item["hospital_code"] == payload["hospital_code"]
                 and item["condition_code"] == payload["condition_code"]
             ),
             None,
@@ -224,7 +224,7 @@ async def response_agent(payload: dict[str, Any]) -> dict[str, Any]:
             payload["settings"],
             payload["condition_code"],
             cluster["level"],
-            query_context=f"Region {payload['region_code']}; analysis date {payload['analysis_date'].isoformat()}",
+            query_context=f"Hospital {payload['hospital_code']}; analysis date {payload['analysis_date'].isoformat()}",
         )
         return {
             "result": result,
@@ -268,7 +268,7 @@ async def summary_agent(payload: dict[str, Any]) -> dict[str, Any]:
 
     evidence = {
         "analysis_date": payload["analysis_date"].isoformat(),
-        "region_name": payload["rows"][0]["regions"]["name"],
+        "hospital_name": payload["rows"][0]["hospitals"]["name"],
         "condition_name": payload["rows"][0]["conditions"]["name"],
         "cluster": payload["cluster"],
         "investigation": investigation,
@@ -345,7 +345,7 @@ async def crisiswatch_surveillance_workflow(request: CrisisWorkflowRequest) -> d
             "failed",
             steps,
             request.analysis_date,
-            request.region_code,
+            request.hospital_code,
             request.condition_code,
         )
 
@@ -353,7 +353,7 @@ async def crisiswatch_surveillance_workflow(request: CrisisWorkflowRequest) -> d
         "rows": ingestion["rows"],
         "context": ingestion["context"],
         "analysis_date": request.analysis_date,
-        "region_code": request.region_code,
+        "hospital_code": request.hospital_code,
         "condition_code": request.condition_code,
         "settings": request.settings,
     }
@@ -388,7 +388,7 @@ async def crisiswatch_surveillance_workflow(request: CrisisWorkflowRequest) -> d
         workflow_status,
         steps,
         request.analysis_date,
-        request.region_code,
+        request.hospital_code,
         request.condition_code,
     )
 
@@ -397,7 +397,7 @@ async def run_workflow(
     repository: SupabaseRepository,
     settings: Settings,
     analysis_date: date,
-    region_code: str,
+    hospital_code: str,
     condition_code: str,
 ) -> dict[str, Any]:
     """Compatibility adapter retaining the API's original call signature."""
@@ -408,7 +408,7 @@ async def run_workflow(
             repository=repository,
             settings=settings,
             analysis_date=analysis_date,
-            region_code=region_code,
+            hospital_code=hospital_code,
             condition_code=condition_code,
         )
     )
@@ -423,7 +423,7 @@ def _workflow_result(
     status: str,
     steps: list[dict[str, Any]],
     analysis_date: date,
-    region_code: str,
+    hospital_code: str,
     condition_code: str,
 ) -> dict[str, Any]:
     completed_at = datetime.now(timezone.utc)
@@ -431,7 +431,7 @@ def _workflow_result(
         "workflow_id": str(uuid4()),
         "status": status,
         "analysis_date": analysis_date.isoformat(),
-        "region_code": region_code,
+        "hospital_code": hospital_code,
         "condition_code": condition_code,
         "started_at": started_at.isoformat(),
         "completed_at": completed_at.isoformat(),

@@ -98,7 +98,7 @@ def deterministic_briefing(evidence: dict[str, Any], fallback_reason: str | None
             "investigate" if any(item["level"] == "investigate" for item in clusters) else "monitor"
         )
         evidence_points = [
-            f"{item['condition']} in {item['region']}: {item['level']} with {len(item['supporting_sources'])} supporting sources."
+            f"{item['condition']} in {item['hospital']}: {item['level']} with {len(item['supporting_sources'])} supporting sources."
             for item in clusters[:8]
         ] or ["No source crossed a configured review threshold."]
         result = {
@@ -106,12 +106,12 @@ def deterministic_briefing(evidence: dict[str, Any], fallback_reason: str | None
             "model": None,
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "headline": f"{highest_level.title()} surveillance summary for {scope}" if clusters else f"No active threshold signal for {scope}",
-            "situation": f"{len(clusters)} active region-disease cluster(s) were identified on {evidence['analysis_date']}.",
+            "situation": f"{len(clusters)} active hospital-disease cluster(s) were identified on {evidence['analysis_date']}.",
             "evidence": evidence_points,
             "uncertainties": [
                 "The dataset is synthetic and aggregated.",
                 "Signals indicate threshold crossings and do not establish causation.",
-                "Each region-disease case requires individual review before action.",
+                "Each hospital-disease case requires individual review before action.",
             ],
             "recommended_review": "Open the relevant evidence cards and review each case before submitting alerts for human approval.",
             "disclaimer": "Decision support only. An Incident Commander retains authority for alert and response actions.",
@@ -123,7 +123,7 @@ def deterministic_briefing(evidence: dict[str, Any], fallback_reason: str | None
     investigation = evidence["investigation"]
     forecast = evidence["forecast"]
     if cluster:
-        headline = f"{cluster['level'].title()} signal for {cluster['condition']} in {cluster['region']}"
+        headline = f"{cluster['level'].title()} signal for {cluster['condition']} in {cluster['hospital']}"
         situation = f"{len(cluster['supporting_sources'])} sources crossed review thresholds on {evidence['analysis_date']}."
         evidence_points = [
             f"Supporting sources: {', '.join(cluster['supporting_sources'])}.",
@@ -132,7 +132,7 @@ def deterministic_briefing(evidence: dict[str, Any], fallback_reason: str | None
         ]
         recommended_review = "Review the prepared evidence and response playbook before deciding whether to approve an alert."
     else:
-        headline = f"No active threshold signal for {evidence['condition_name']} in {evidence['region_name']}"
+        headline = f"No active threshold signal for {evidence['condition_name']} in {evidence['hospital_name']}"
         situation = f"Available sources remained below configured review thresholds on {evidence['analysis_date']}."
         evidence_points = [
             f"Peak combined activity was {investigation['peak_total']} on {investigation['peak_date']}.",
@@ -149,7 +149,7 @@ def deterministic_briefing(evidence: dict[str, Any], fallback_reason: str | None
         "uncertainties": [
             "The dataset is synthetic and aggregated.",
             "Scenario trajectories are bounded planning estimates, not epidemiological predictions.",
-            "Regional indicators provide context and do not establish causation.",
+            "Hospital operations indicators describe capacity and do not establish the cause of a signal.",
         ],
         "recommended_review": recommended_review,
         "disclaimer": "Decision support only. An Incident Commander retains authority for alert and response actions.",
@@ -259,7 +259,7 @@ def deterministic_forecast_briefing(
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "headline": f"Seven-day activity is {direction}",
         "outlook": (
-            f"For {evidence['condition_name']} in {evidence['region_name']}, the expected scenario "
+            f"For {evidence['condition_name']} in {evidence['hospital_name']}, the expected scenario "
             f"moves from {latest} to {expected} visits by day seven ({expected_change:+.1f}%)."
         ),
         "key_points": [

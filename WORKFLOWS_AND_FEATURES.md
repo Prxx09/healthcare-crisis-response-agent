@@ -8,9 +8,9 @@ CrisisWatch is a decision-support application for synthetic, aggregate public-he
 
 The workflow is orchestrated with Microsoft Agent Framework and exposed through FastAPI.
 
-1. **Ingestion Agent** — reads normalized surveillance observations and regional context from Supabase, verifies that records exist, and summarizes source coverage and data quality.
+1. **Ingestion Agent** — reads normalized surveillance observations and hospital context from Supabase, verifies that records exist, and summarizes source coverage and data quality.
 2. **Signal Agent** — calculates a 28-day baseline, percentage change and z-score for each source; assigns `monitor`, `investigate` or `escalate`; and checks multi-source corroboration.
-3. **Investigation Agent** — compares 14-day source activity, identifies peak activity and unusual daily values, and summarizes rainfall, mobility and temperature as non-causal context.
+3. **Investigation Agent** — compares 14-day source activity, identifies peak activity and unusual daily values, and summarizes hospital bed occupancy, staffing coverage, and supply readiness.
 4. **Forecast Agent** — creates bounded best-case, expected and upper-stress visit scenarios. The default horizon is seven days. These are planning scenarios, not epidemiological predictions.
 5. **Response Agent** — selects condition- and alert-level actions from the approved versioned JSON playbook. Optional Pinecone retrieval adds supporting playbook context but cannot replace or create actions.
 6. **AI Summary Agent** — prepares a grounded evidence briefing through Groq or Hugging Face when configured. Invalid or unavailable model output falls back to a deterministic briefing.
@@ -43,7 +43,7 @@ Investigation and forecasting execute concurrently after signal analysis. The wo
 
 ## Implemented Interface Features
 
-- Region, condition and analysis-date filters
+- Hospital, condition and analysis-date filters
 - Surveillance and scenario charts
 - Evidence review and grounded AI briefing dropdown
 - Recommended response playbook display
@@ -59,6 +59,6 @@ Investigation and forecasting execute concurrently after signal analysis. The wo
 - The data is synthetic and aggregated; no patient-level records are used.
 - The application does not diagnose disease or declare outbreaks.
 - Forecasts are bounded demand scenarios, not outbreak probabilities.
-- Environmental indicators are supporting context, not causal evidence.
+- Hospital operations snapshots show capacity; they do not explain why disease activity changed.
 - No map/GeoJSON interface, frontend authentication, application RBAC, Microsoft Graph integration or automatic playbook activation is implemented.
 - The workflow runs locally with Microsoft Agent Framework Core. It is not deployed as a hosted Microsoft Foundry agent.

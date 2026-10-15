@@ -1,4 +1,4 @@
-export interface Region { id: number; code: string; name: string; population: number }
+export interface Hospital { id: number; code: string; name: string; bed_capacity: number }
 export interface Condition { id: number; code: string; name: string; syndrome_group: string }
 export interface Observation {
   observation_date: string;
@@ -6,7 +6,7 @@ export interface Observation {
   observation_count: number;
   coverage_pct: number;
   data_quality: string;
-  regions: { code: string; name: string };
+  hospitals: { code: string; name: string };
   conditions: { code: string; name: string };
 }
 export interface SourceSignal {
@@ -18,8 +18,8 @@ export interface SourceSignal {
   level: "monitor" | "investigate" | "escalate";
 }
 export interface Cluster {
-  region: string;
-  region_code: string;
+  hospital: string;
+  hospital_code: string;
   condition: string;
   condition_code: string;
   level: "monitor" | "investigate" | "escalate";
@@ -39,7 +39,7 @@ export interface AlertRecord {
   review_note: string | null;
   approved_at: string | null;
   created_at: string;
-  regions: { code: string; name: string };
+  hospitals: { code: string; name: string };
   conditions: { code: string; name: string };
 }
 export interface ForecastPoint { date: string; projected_visits: number }
@@ -87,7 +87,7 @@ export interface InvestigationResponse {
     outlier_dates: string[];
   }>;
   data_quality: Record<string, number>;
-  regional_context: { average_rainfall_index: number | null; average_mobility_index: number | null; average_temperature_c: number | null };
+  hospital_context: { average_bed_occupancy_pct: number | null; average_staffing_coverage_pct: number | null; average_supply_readiness_pct: number | null };
   findings: string[];
 }
 export interface ResponseAction {
@@ -141,7 +141,7 @@ export interface WorkflowRun {
   workflow_id: string;
   status: "completed" | "partial" | "failed" | "waiting_for_approval";
   analysis_date: string;
-  region_code: string;
+  hospital_code: string;
   condition_code: string;
   duration_ms: number;
   steps: WorkflowStep[];
@@ -161,7 +161,7 @@ export interface IncidentAction {
   completed_at: string | null;
   created_at: string;
   updated_at: string;
-  alerts: { alert_level: "monitor" | "investigate" | "escalate"; analysis_date: string; regions: { code: string; name: string }; conditions: { code: string; name: string } };
+  alerts: { alert_level: "monitor" | "investigate" | "escalate"; analysis_date: string; hospitals: { code: string; name: string }; conditions: { code: string; name: string } };
 }
 export interface TimelineEvent {
   timestamp: string;

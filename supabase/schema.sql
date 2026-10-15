@@ -1,11 +1,11 @@
 -- Healthcare Crisis Prediction and Response Agent
 -- Synthetic, aggregate surveillance schema. No patient-level health information is stored.
 
-create table if not exists public.regions (
+create table if not exists public.hospitals (
   id bigint generated always as identity primary key,
   code text not null unique check (code ~ '^[a-z0-9_]+$'),
   name text not null unique,
-  population integer not null check (population > 0),
+  bed_capacity integer not null check (bed_capacity > 0),
   active boolean not null default true,
   created_at timestamptz not null default now()
 );
@@ -19,22 +19,23 @@ create table if not exists public.conditions (
   created_at timestamptz not null default now()
 );
 
-create table if not exists public.regional_context (
+create table if not exists public.hospital_context (
   id bigint generated always as identity primary key,
   observation_date date not null,
-  region_id bigint not null references public.regions(id) on delete restrict,
-  rainfall_index numeric(7,2),
-  mobility_index numeric(7,2),
-  temperature_c numeric(5,2),
+  hospital_id bigint not null references public.hospitals(id) on delete restrict,
+  staffed_beds integer not null check (staffed_beds > 0),
+  occupied_beds integer not null check (occupied_beds >= 0 and occupied_beds <= staffed_beds),
+  staffing_coverage_pct numeric(5,2) not null check (staffing_coverage_pct between 0 and 100),
+  supply_readiness_pct numeric(5,2) not null check (supply_readiness_pct between 0 and 100),
   context_note text,
   created_at timestamptz not null default now(),
-  unique (observation_date, region_id)
+  unique (observation_date, hospital_id)
 );
 
 create table if not exists public.surveillance_observations (
   id bigint generated always as identity primary key,
   observation_date date not null,
-  region_id bigint not null references public.regions(id) on delete restrict,
+  hospital_id bigint not null references public.hospitals(id) on delete restrict,
   condition_id bigint not null references public.conditions(id) on delete restrict,
   signal_source text not null check (signal_source in ('visits', 'lab_positives', 'pharmacy_demand')),
   observation_count integer not null check (observation_count >= 0),
@@ -43,13 +44,13 @@ create table if not exists public.surveillance_observations (
   source_note text,
   synthetic_run_id text not null,
   created_at timestamptz not null default now(),
-  unique (observation_date, region_id, condition_id, signal_source, synthetic_run_id)
+  unique (observation_date, hospital_id, condition_id, signal_source, synthetic_run_id)
 );
 
 create table if not exists public.alerts (
   id bigint generated always as identity primary key,
   analysis_date date,
-  region_id bigint not null references public.regions(id) on delete restrict,
+  hospital_id bigint not null references public.hospitals(id) on delete restrict,
   condition_id bigint not null references public.conditions(id) on delete restrict,
   alert_level text not null check (alert_level in ('monitor', 'investigate', 'escalate')),
   evidence_summary jsonb not null default '{}'::jsonb,
@@ -84,21 +85,21 @@ create table if not exists public.incident_actions (
 );
 
 create index if not exists surveillance_observations_lookup_idx
-  on public.surveillance_observations (condition_id, region_id, observation_date desc, signal_source);
-create index if not exists regional_context_lookup_idx
-  on public.regional_context (region_id, observation_date desc);
+  on public.surveillance_observations (condition_id, hospital_id, observation_date desc, signal_source);
+create index if not exists hospital_context_lookup_idx
+  on public.hospital_context (hospital_id, observation_date desc);
 create index if not exists alerts_review_idx
   on public.alerts (status, created_at desc);
-create index if not exists surveillance_observations_region_idx
-  on public.surveillance_observations (region_id);
-create index if not exists alerts_region_idx
-  on public.alerts (region_id);
+create index if not exists surveillance_observations_hospital_idx
+  on public.surveillance_observations (hospital_id);
+create index if not exists alerts_hospital_idx
+  on public.alerts (hospital_id);
 create index if not exists alerts_condition_idx
   on public.alerts (condition_id);
 create index if not exists alerts_approved_by_idx
   on public.alerts (approved_by);
 create unique index if not exists alerts_analysis_scope_rule_idx
-  on public.alerts (analysis_date, region_id, condition_id, rule_version)
+  on public.alerts (analysis_date, hospital_id, condition_id, rule_version)
   where analysis_date is not null;
 create index if not exists incident_actions_status_due_idx
   on public.incident_actions (status, due_at nulls last);
@@ -107,9 +108,9 @@ create index if not exists incident_actions_alert_idx
 
 -- Tables remain unavailable through the public Data API until explicit role policies are added.
 -- The FastAPI backend is the first access path and keeps its service-role credential server-only.
-alter table public.regions enable row level security;
+alter table public.hospitals enable row level security;
 alter table public.conditions enable row level security;
-alter table public.regional_context enable row level security;
+alter table public.hospital_context enable row level security;
 alter table public.surveillance_observations enable row level security;
 alter table public.alerts enable row level security;
 alter table public.incident_actions enable row level security;

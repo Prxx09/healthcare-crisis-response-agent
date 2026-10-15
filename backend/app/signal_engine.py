@@ -9,8 +9,8 @@ from typing import Any
 
 @dataclass(frozen=True)
 class SourceSignal:
-    region_code: str
-    region_name: str
+    hospital_code: str
+    hospital_name: str
     condition_code: str
     condition_name: str
     signal_source: str
@@ -35,9 +35,9 @@ def _level(percent_change: float, z_score: float | None) -> str | None:
 def detect_source_signals(rows: list[dict[str, Any]], analysis_date: date, baseline_days: int = 28) -> list[SourceSignal]:
     grouped: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
-        region = row["regions"]
+        hospital = row["hospitals"]
         condition = row["conditions"]
-        grouped[(region["code"], condition["code"], row["signal_source"])].append(row)
+        grouped[(hospital["code"], condition["code"], row["signal_source"])].append(row)
 
     result: list[SourceSignal] = []
     baseline_start = analysis_date - timedelta(days=baseline_days)
@@ -61,8 +61,8 @@ def detect_source_signals(rows: list[dict[str, Any]], analysis_date: date, basel
         level = _level(percent_change, z_score)
         if level:
             result.append(SourceSignal(
-                region_code=current["regions"]["code"],
-                region_name=current["regions"]["name"],
+                hospital_code=current["hospitals"]["code"],
+                hospital_name=current["hospitals"]["name"],
                 condition_code=current["conditions"]["code"],
                 condition_name=current["conditions"]["name"],
                 signal_source=source,
@@ -79,14 +79,14 @@ def detect_source_signals(rows: list[dict[str, Any]], analysis_date: date, basel
 def summarise_clusters(signals: list[SourceSignal]) -> list[dict[str, Any]]:
     clusters: dict[tuple[str, str], list[SourceSignal]] = defaultdict(list)
     for signal in signals:
-        clusters[(signal.region_code, signal.condition_code)].append(signal)
+        clusters[(signal.hospital_code, signal.condition_code)].append(signal)
     summaries = []
     for _, items in clusters.items():
         sources = sorted(item.signal_source for item in items)
         highest = "escalate" if any(item.level == "escalate" for item in items) else max((item.level for item in items), key=("monitor", "investigate", "escalate").index)
         summaries.append({
-            "region": items[0].region_name,
-            "region_code": items[0].region_code,
+            "hospital": items[0].hospital_name,
+            "hospital_code": items[0].hospital_code,
             "condition": items[0].condition_name,
             "condition_code": items[0].condition_code,
             "level": highest,

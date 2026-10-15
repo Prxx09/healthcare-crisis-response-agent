@@ -10,11 +10,11 @@ The current implementation covers three conditions selected for shared data stru
 
 | Condition | Primary signals | Context |
 |---|---|---|
-| Influenza-like illness (ILI) | Visits, laboratory positives, pharmacy demand | Mobility and temperature |
-| Acute gastroenteritis (AGE) | Visits, laboratory positives, pharmacy demand | Shared-location and regional context |
-| Dengue | Suspected visits, laboratory positives, demand indicators | Rainfall and temperature |
+| Influenza-like illness (ILI) | Visits, laboratory positives, pharmacy demand | Hospital capacity and staffing |
+| Acute gastroenteritis (AGE) | Visits, laboratory positives, pharmacy demand | Hospital capacity and supplies |
+| Dengue | Suspected visits, laboratory positives | Hospital capacity and staffing |
 
-The system monitors four simulated districts from 1 October 2025 through 30 September 2026.
+The system monitors four simulated hospitals from 1 October 2025 through 13 October 2026. Counts represent observations at each hospital; they do not imply a geographic outbreak.
 
 ## Workflow
 
@@ -38,9 +38,9 @@ Every execution returns a trace with component status and timing. Controlled res
 
 ## Main capabilities
 
-- Multi-source surveillance for visits, laboratory positives, pharmacy demand, and regional context.
-- Transparent baseline anomaly detection by region, condition, source, and date.
-- Cluster investigation with source correlation, peak activity, data quality, rainfall, mobility, and temperature.
+- Multi-source surveillance for visits, laboratory positives, pharmacy demand, and hospital context.
+- Transparent baseline anomaly detection by hospital, condition, source, and date.
+- Hospital-level signal investigation with source comparison, peak activity, data quality, bed occupancy, staffing coverage, and supply readiness.
 - Seven-day best-case, expected, and worst-case planning scenarios.
 - Prominent forecast outlook with day-seven metrics and an optional structured LLM interpretation.
 - Versioned response playbooks with owners, timeframes, approval requirements, and condition guidance.
@@ -184,16 +184,16 @@ Use these dates in the dashboard to demonstrate known synthetic patterns:
 
 | Date | Scope | Expected behavior |
 |---|---|---|
-| 10 November 2025 | Lakeside District / AGE | Corroborated investigation signal |
-| 15 December 2025 | Central District / ILI | Corroborated investigation signal |
-| 15 December 2025 | East District / Dengue | Corroborated investigation signal |
-| 30 September 2026 | Central District / ILI | No active threshold signal |
+| 10 November 2025 | Lakeside Hospital / AGE | Corroborated investigation signal |
+| 15 December 2025 | Central Hospital / ILI | Corroborated investigation signal |
+| 15 December 2025 | East Hospital / Dengue | Corroborated investigation signal |
+| 30 September 2026 | Central Hospital / ILI | No active threshold signal |
 
 ## API overview
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /api/v1/regions` | Available regions |
+| `GET /api/v1/hospitals` | Available hospitals |
 | `GET /api/v1/conditions` | Monitored conditions |
 | `GET /api/v1/observations` | Filtered aggregate surveillance observations |
 | `GET /api/v1/signals` | Rule-based signal and cluster output |
@@ -231,10 +231,10 @@ Interactive request and response schemas are available through FastAPI at `/docs
 ## Supabase project
 
 - Project name: `healthcare-crisis-response-agent`
-- Region: `ap-south-1`
+- Hospital: `ap-south-1`
 - Project reference: `jinbmggobfeccvqrnnze`
 
-The database currently contains four simulated regions, three monitored conditions, 11,680 surveillance observations, and 1,460 regional-context records. Schema changes are tracked in `supabase/migrations/`.
+The database contains four simulated hospitals, three monitored conditions, 12,096 surveillance observations, and 1,512 hospital operations snapshots. Schema changes are tracked in `supabase/migrations/`.
 
 ## Final environment configuration
 

@@ -3,17 +3,17 @@
 
 grant usage on schema public to anon, authenticated;
 grant select on table
-  public.regions,
+  public.hospitals,
   public.conditions,
-  public.regional_context,
+  public.hospital_context,
   public.surveillance_observations
 to anon, authenticated;
 
 revoke all on table public.alerts from anon, authenticated;
 
-drop policy if exists "public read regions" on public.regions;
-create policy "public read regions"
-on public.regions for select
+drop policy if exists "public read hospitals" on public.hospitals;
+create policy "public read hospitals"
+on public.hospitals for select
 to anon, authenticated
 using (true);
 
@@ -23,9 +23,9 @@ on public.conditions for select
 to anon, authenticated
 using (true);
 
-drop policy if exists "public read regional context" on public.regional_context;
-create policy "public read regional context"
-on public.regional_context for select
+drop policy if exists "public read hospital context" on public.hospital_context;
+create policy "public read hospital context"
+on public.hospital_context for select
 to anon, authenticated
 using (true);
 

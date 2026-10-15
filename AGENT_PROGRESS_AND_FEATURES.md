@@ -7,7 +7,7 @@
 | Microsoft Agent Framework orchestration | Complete | Seven named workflow steps with parallel investigation and forecasting; existing FastAPI response contract retained. |
 | Ingestion Agent | Complete | Reads selected aggregate observations and context from Supabase; reports source coverage and data quality. |
 | Signal Agent | Complete | 28-day baseline, percentage change, z-score, rule-based alert level and source corroboration. |
-| Investigation Agent | Complete | 14-day source comparison, peak activity, unusual-value detection and regional context summary. |
+| Investigation Agent | Complete | 14-day source comparison, peak activity, unusual-value detection and hospital context summary. |
 | Forecast Agent | Complete | Bounded best-case, expected and upper-stress visit scenarios; seven-day default horizon. |
 | Response Agent | Complete | Selects authoritative condition- and level-specific JSON playbook actions. |
 | Pinecone RAG | Implemented, optional | Indexing and filtered retrieval of approved playbook context; deterministic fallback when disabled or unavailable. |

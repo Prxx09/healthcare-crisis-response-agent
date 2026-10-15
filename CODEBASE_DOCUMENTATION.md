@@ -56,7 +56,7 @@ The backend is written in Python (FastAPI, Pydantic, ReportLab, Pinecone, Groq/H
     - Supabase credentials (`supabase_url`, `supabase_publishable_key`, `supabase_secret_key`).
     - AI providers (`ai_provider`: `"deterministic"`, `"groq"`, or `"huggingface"`).
     - API keys and model parameters (`groq_api_key`, `groq_model`, `hf_api_key`, `hf_model`).
-    - Pinecone Vector DB settings (`pinecone_api_key`, `pinecone_index_name`, `pinecone_cloud`, `pinecone_region`, `pinecone_namespace`, `pinecone_embedding_model`).
+    - Pinecone Vector DB settings (`pinecone_api_key`, `pinecone_index_name`, `pinecone_cloud`, `pinecone_hospital`, `pinecone_namespace`, `pinecone_embedding_model`).
     - SMTP server parameters (`smtp_host`, `smtp_port`, `smtp_user`, `smtp_password`, `smtp_from_email`, `smtp_use_tls`).
     - CORS origins parser: The `@property origins` parses comma-separated `allowed_origins` into clean lists.
   - Cached via `@lru_cache()` in `get_settings()` to ensure a single immutable config instance across worker threads.
@@ -77,9 +77,9 @@ The backend is written in Python (FastAPI, Pydantic, ReportLab, Pinecone, Groq/H
     - `_read_headers`: Uses `supabase_publishable_key` for read-only queries.
     - `_write_headers`: Uses `supabase_secret_key` for mutations, upserts, and security-critical state changes.
   - Methods:
-    - `get_regions()` & `get_conditions()`: Fetches geographic and disease classification reference tables.
-    - `get_observations(region_code, condition_code, start_date, end_date)`: Retrieves structured surveillance observations (case counts, signal sources, test positivity).
-    - `get_regional_context(region_code, start_date, end_date)`: Fetches environmental covariates (rainfall, mobility indices, temperature).
+    - `get_hospitals()` & `get_conditions()`: Fetches hospital and disease reference tables.
+    - `get_observations(hospital_code, condition_code, start_date, end_date)`: Retrieves structured surveillance observations (case counts, signal sources, test positivity).
+    - `get_hospital_context(start_date, end_date, hospital_code)`: Fetches hospital staffing, bed occupancy, and supply snapshots.
     - `get_alerts()` / `create_alert()` / `decide_alert()`: Manages the incident alert lifecycle.
     - `get_actions()` / `create_actions()` / `update_action()`: Manages operational tasks assigned from crisis playbooks.
     - `get_email_alert_config()` / `save_email_alert_config()` / `log_email_alert_delivery()`: Manages email dispatch schedules and delivery audit logs.
@@ -87,27 +87,27 @@ The backend is written in Python (FastAPI, Pydantic, ReportLab, Pinecone, Groq/H
 ### 2.4 `backend/app/signal_engine.py`
 - **Purpose**: Core epidemiological statistical engine for detecting anomalies across multi-source syndromic streams.
 - **Implementation**:
-  - `SourceSignal`: Frozen dataclass capturing signal metrics (`region_code`, `condition_code`, `signal_source`, `current_count`, `baseline_mean`, `baseline_stdev`, `percent_change`, `z_score`, `level`).
+  - `SourceSignal`: Frozen dataclass capturing signal metrics (`hospital_code`, `condition_code`, `signal_source`, `current_count`, `baseline_mean`, `baseline_stdev`, `percent_change`, `z_score`, `level`).
   - `detect_source_signals()`:
-    - Partitions observations by `(region_code, condition_code, signal_source)`.
+    - Partitions observations by `(hospital_code, condition_code, signal_source)`.
     - Isolates observations falling within a rolling 28-day baseline window preceding `analysis_date`.
     - Requires $\ge 14$ baseline data points to prevent false alarms on sparse data.
     - Computes Gaussian baseline statistics ($Z$-score and percentage change).
     - Classifies alert levels (`escalate`, `investigate`, `monitor`, `normal`).
   - `summarise_clusters()`:
-    - Groups isolated source signals by `(region_code, condition_code)`.
+    - Groups isolated source signals by `(hospital_code, condition_code)`.
     - Evaluates **cross-source corroboration**: requires $\ge 2$ independent surveillance sources (e.g., Emergency Department + Lab Reports) to corroborate a cluster.
     - Returns ranked clusters prioritized by highest alert level and magnitude of change.
 
 ### 2.5 `backend/app/investigation_engine.py`
-- **Purpose**: 14-day deep-dive investigation of anomalous clusters, isolating temporal outliers and environmental factors.
+- **Purpose**: 14-day investigation of unusual hospital-level activity, isolating temporal outliers and describing available capacity.
 - **Implementation**:
   - `_outlier_dates()`: Identifies extreme epidemiological spike dates using the **Modified Z-Score via Median Absolute Deviation (MAD)**.
   - `_source_summary()`: Computes directional trajectory (e.g. accelerating, slowing, steady) by comparing initial window medians to recent window medians.
   - `investigate_cluster()`:
     - Gathers 14-day historical case counts across all reporting sources.
     - Determines the peak case volume date and multi-day trend.
-    - Aggregates regional context indicators (mean rainfall in mm, mobility index change %, mean temperature).
+    - Aggregates hospital operations indicators (bed occupancy, staffing coverage, supply readiness).
     - Produces a consolidated investigation dossier passed to the AI summarizer.
 
 ### 2.6 `backend/app/forecast_engine.py`
@@ -184,7 +184,7 @@ The backend is written in Python (FastAPI, Pydantic, ReportLab, Pinecone, Groq/H
   - `generate_eligible_alerts()`:
     - Invokes `signal_engine` over current observations.
     - Filters clusters meeting minimum alert criteria (corroborated by multiple sources and level $\in \{\text{"investigate"}, \text{"escalate"}\}$).
-    - Idempotently creates alerts in Supabase (handles HTTP 409 conflict gracefully if an alert already exists for the region/condition/date).
+    - Idempotently creates alerts in Supabase (handles HTTP 409 conflict gracefully if an alert already exists for the hospital/condition/date).
 
 ### 2.14 `backend/app/reporting.py`
 - **Purpose**: Automated situation report generation in publication-grade PDF format via ReportLab.
@@ -193,7 +193,7 @@ The backend is written in Python (FastAPI, Pydantic, ReportLab, Pinecone, Groq/H
   - `build_situation_report(alert, actions)`:
     - Generates a formatted A4 PDF containing:
       - Header banner with incident severity color-coding.
-      - Incident Metadata Table (Region, Condition, Trigger Date, Reviewer).
+      - Incident Metadata Table (Hospital, Condition, Trigger Date, Reviewer).
       - Epidemiological Signal Corroboration Table.
       - Decision Audit Trail.
       - Tactical Action Assignment Table with role owners and SLAs.
@@ -222,7 +222,7 @@ The backend is written in Python (FastAPI, Pydantic, ReportLab, Pinecone, Groq/H
   - Configures CORS middleware dynamically from `settings.origins`.
   - Exposes 20+ REST endpoints covering:
     - System health: `GET /health`
-    - Reference data: `GET /regions`, `GET /conditions`, `GET /data-availability`
+    - Reference data: `GET /hospitals`, `GET /conditions`, `GET /data-availability`
     - Surveillance & Analytics: `GET /observations`, `GET /signals`, `GET /forecast`, `GET /investigation`
     - Intelligence: `POST /briefing`, `POST /forecast/briefing`, `POST /briefing/aggregate`
     - Agentic Workflow: `POST /workflow`
@@ -239,7 +239,7 @@ The frontend is a single-page React 18 application built with TypeScript, Vite, 
 ### 3.1 `frontend/src/types.ts`
 - **Purpose**: TypeScript interfaces defining all data models matching backend schemas.
 - **Implementation**:
-  - Defines `Region`, `Condition`, `Observation`, `Cluster`, `SignalResponse`, `AlertRecord`, `ForecastResponse`, `InvestigationResponse`, `ResponsePlan`, `EvidenceBriefing`, `WorkflowRun`, `IncidentAction`, `IncidentTimeline`, `EmailAlertConfig`, and `EmailAlertDashboard`.
+  - Defines `Hospital`, `Condition`, `Observation`, `Cluster`, `SignalResponse`, `AlertRecord`, `ForecastResponse`, `InvestigationResponse`, `ResponsePlan`, `EvidenceBriefing`, `WorkflowRun`, `IncidentAction`, `IncidentTimeline`, `EmailAlertConfig`, and `EmailAlertDashboard`.
 
 ### 3.2 `frontend/src/api.ts`
 - **Purpose**: Type-safe HTTP communication layer wrapping `fetch`.
@@ -251,7 +251,7 @@ The frontend is a single-page React 18 application built with TypeScript, Vite, 
 - **Purpose**: Mission Control Dashboard and primary application view container.
 - **Implementation**:
   - Manages tab navigation (`dashboard`, `alerts`, `actions`, `emails`, `playbooks`) synchronized with browser history (`history.pushState`).
-  - Interactive multi-parameter filtering (Region dropdown, Condition dropdown, Date picker).
+  - Interactive multi-parameter filtering (Hospital dropdown, Condition dropdown, Date picker).
   - Visualization:
     - Aggregated multi-source surveillance observation trends.
     - Recharts line charts displaying historical observations alongside 7-day projected forecast scenarios (Best, Expected, Worst).
@@ -289,7 +289,7 @@ CrisisWatch employs robust mathematical and statistical techniques across each p
 
 ### 4.1 Statistical Anomaly Detection (Signal Engine)
 
-For a specific region $R$, condition $C$, and surveillance source $S$ on target date $t$:
+For a specific hospital $R$, condition $C$, and surveillance source $S$ on target date $t$:
 
 #### 1. Baseline Window
 A rolling 28-day window prior to the analysis date is selected:
@@ -389,7 +389,7 @@ In `briefing_engine.py`, AI outputs are strictly constrained against data manipu
    Surveillance outputs and user-provided notes are serialized to JSON and wrapped in explicit boundary markers:
    ```xml
    <untrusted_evidence_json>
-   {"region": "REG-01", "counts": [...]}
+   {"hospital": "REG-01", "counts": [...]}
    </untrusted_evidence_json>
    ```
 2. **Schema Invariant Enforcement**:
@@ -430,8 +430,8 @@ CrisisWatch uses the **`agent_framework`** package (`agent-framework-core==1.21.
 All agent steps are defined in `backend/app/orchestrator.py`:
 
 #### 1. `ingestion_agent`
-- **Role**: Ingests surveillance observations and regional covariates for the specified date range.
-- **Behavior**: Calls `supabase.get_observations()` and `supabase.get_regional_context()`. Validates data volume. Emits structured telemetry trace.
+- **Role**: Ingests hospital surveillance observations and operations snapshots for the specified date range.
+- **Behavior**: Calls `supabase.get_observations()` and `supabase.get_hospital_context()`. Validates data volume. Emits structured telemetry trace.
 
 #### 2. `signal_agent`
 - **Role**: Executes epidemiological statistical anomaly detection.
@@ -439,7 +439,7 @@ All agent steps are defined in `backend/app/orchestrator.py`:
 
 #### 3. `investigation_agent` (`replay_key="investigation"`)
 - **Role**: Conducts a 14-day temporal investigation on the active cluster.
-- **Behavior**: Computes Modified Z-score outliers, identifies peak volume dates, and calculates environmental correlations (rainfall, temperature, mobility).
+- **Behavior**: Computes Modified Z-score outliers, identifies peak volume dates, and summarizes hospital operations indicators.
 
 #### 4. `forecast_agent` (`replay_key="forecast"`)
 - **Role**: Projects 7-day epidemiological trajectories.
@@ -511,7 +511,7 @@ Every workflow execution produces a `WorkflowRun` object with fine-grained execu
 - **State Transitions**:
   - `completed`: Successfully analyzed, triaged, and plan resolved.
   - `waiting_for_approval`: Escalation threshold reached; held pending human Incident Commander review.
-  - `partial`: Executed with fallback heuristics (e.g. LLM degradation or missing environmental data).
+  - `partial`: Executed with fallback heuristics (e.g. LLM degradation or missing hospital operations data).
   - `failed`: Terminal unrecoverable error during execution.
 - **Telemetry Trace Record (`_trace`)**:
   Captures per-step execution metrics:
