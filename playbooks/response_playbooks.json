@@ -1,7 +1,7 @@
 {
-  "version": "1.1",
+  "version": "1.2",
   "name": "Healthcare Crisis Response Playbooks",
-  "description": "Approved operational response actions for public-health surveillance alerts.",
+  "description": "Approved operational response actions for hospital surveillance alerts.",
   "levels": {
     "monitor": [
       {"category": "data review", "action": "Check the latest reports for missing data, delays or an unusual increase", "owner": "Epidemiology lead", "timeframe": "Within 1 business day", "requires_approval": false},
