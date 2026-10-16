@@ -19,7 +19,11 @@ TOOLS = ("check_history", "check_labs", "check_reporting", "check_pharmacy", "ch
 
 
 def _daily(rows: list[dict[str, Any]]) -> dict[str, int]:
-    return {row["observation_date"]: int(row["observation_count"]) for row in rows}
+    totals: dict[str, int] = {}
+    for row in rows:
+        day = row["observation_date"]
+        totals[day] = totals.get(day, 0) + int(row["observation_count"])
+    return totals
 
 
 def _change(rows: list[dict[str, Any]], analysis_date: date) -> dict[str, Any]:
