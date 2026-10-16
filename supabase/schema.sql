@@ -118,3 +118,38 @@ alter table public.incident_actions enable row level security;
 revoke all on table public.incident_actions from anon, authenticated;
 grant select, insert, update, delete on table public.incident_actions to service_role;
 grant usage, select on sequence public.incident_actions_id_seq to service_role;
+
+-- Predictive agent decision trail and internal evidence requests.
+create table if not exists public.predictive_assessments (
+  id bigint generated always as identity primary key,
+  analysis_date date not null,
+  hospital_code text not null references public.hospitals(code),
+  condition_code text not null references public.conditions(code),
+  risk_level text not null check (risk_level in ('routine', 'watch', 'prepare', 'uncertain')),
+  next_review_at timestamptz not null,
+  result jsonb not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists predictive_assessments_scope_idx
+  on public.predictive_assessments (hospital_code, condition_code, analysis_date, created_at desc, id desc);
+alter table public.predictive_assessments enable row level security;
+
+create table if not exists public.agent_followup_requests (
+  id bigint generated always as identity primary key,
+  assessment_id bigint not null references public.predictive_assessments(id) on delete restrict,
+  analysis_date date not null,
+  hospital_code text not null references public.hospitals(code),
+  condition_code text not null references public.conditions(code),
+  request_key text not null check (request_key in ('verify_reporting', 'verify_lab_backlog', 'verify_readiness')),
+  owner_role text not null,
+  request_text text not null,
+  due_at timestamptz not null,
+  status text not null default 'open' check (status in ('open', 'completed')),
+  completion_note text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (analysis_date, hospital_code, condition_code, request_key)
+);
+create index if not exists agent_followup_requests_open_idx
+  on public.agent_followup_requests (due_at) where status = 'open';
+alter table public.agent_followup_requests enable row level security;

@@ -34,7 +34,7 @@ flowchart TD
     I --> K["Timeline and PDF report"]
 ```
 
-Every execution returns a trace with component status and timing. Controlled response actions are never issued automatically.
+The existing workflow returns a trace with component status and timing. A separate predictive agent can investigate a selected hospital and disease, save its evidence trail, and create internal verification requests. Controlled response actions remain subject to Incident Commander approval.
 
 ## Main capabilities
 
@@ -42,6 +42,10 @@ Every execution returns a trace with component status and timing. Controlled res
 - Transparent baseline anomaly detection by hospital, condition, source, and date.
 - Hospital-level signal investigation with source comparison, peak activity, data quality, bed occupancy, staffing coverage, and supply readiness.
 - Seven-day best-case, expected, and worst-case planning scenarios.
+- Robust forecast anchor based on the latest three-day median, with a minimum reported-day requirement.
+- Predictive agent with bounded evidence checks, optional Groq/Hugging Face tool choice, a deterministic fallback, and explicit contradictory-evidence review.
+- Persisted assessments and internal lab, surveillance, or operations verification requests; completing a request runs a fresh assessment.
+- A five-minute scheduler checks due scopes and reassesses them when a newer surveillance date is available.
 - Prominent forecast outlook with day-seven metrics and an optional structured LLM interpretation.
 - Versioned response playbooks with owners, timeframes, approval requirements, and condition guidance.
 - Optional Pinecone RAG retrieval over approved playbook guidance; deterministic playbook actions remain authoritative.
@@ -87,6 +91,8 @@ AGENT_PROGRESS_AND_FEATURES.md  Agent implementation and configuration status
 The end-to-end surveillance pipeline runs as a Microsoft Agent Framework functional workflow. Ingestion, signal detection, investigation, forecasting, response-plan retrieval, briefing generation, and the Incident Commander gate are named framework steps. Investigation and forecasting retain their parallel execution, and the existing `/api/v1/workflow` response contract is unchanged.
 
 The framework is used for orchestration and observability; it does not replace the deterministic domain engines. Alert levels still come from transparent rules, approved actions still come from the versioned playbook, Pinecone remains supporting retrieval only, and controlled actions still require the existing human approval endpoint. No Azure resource is required for local execution. Deploying the workflow as a hosted Microsoft Foundry agent additionally requires Azure Developer CLI and a configured Foundry project.
+
+The predictive investigation uses a bounded tool-choice loop outside the fixed surveillance workflow. When `AI_PROVIDER` is configured for Groq or Hugging Face, the model chooses one remaining read-only check at a time. Invalid or unavailable model responses fall back to a transparent policy. The agent records its choices and may create internal evidence requests in Supabase; it cannot issue clinical instructions, procurement, public warnings, or resource transfers.
 
 The project pins `agent-framework-core==1.21.0`. Microsoft currently marks the functional workflow API as experimental, so framework upgrades should be tested before changing this version.
 
@@ -199,6 +205,9 @@ Use these dates in the dashboard to demonstrate known synthetic patterns:
 | `GET /api/v1/signals` | Rule-based signal and cluster output |
 | `GET /api/v1/investigation` | Correlated cluster evidence |
 | `GET /api/v1/forecast` | Seven-day planning scenarios |
+| `GET /api/v1/predictive-assessments/latest` | Latest saved investigation for a hospital, disease, and date |
+| `POST /api/v1/predictive-assessments` | Run and save an evidence-seeking assessment and create internal requests |
+| `PATCH /api/v1/agent-followups/{id}` | Record a verification result and complete its request |
 | `GET /api/v1/forecast/briefing` | Structured AI interpretation of prepared forecast scenarios |
 | `GET /api/v1/response-plan` | Bounded playbook actions |
 | `GET /api/v1/briefing` | Stakeholder evidence briefing |
@@ -244,7 +253,7 @@ Backend variables:
 |---|---|---|
 | `SUPABASE_URL` | Yes | Supabase project API URL |
 | `SUPABASE_PUBLISHABLE_KEY` | Yes | Read-only synthetic surveillance access |
-| `SUPABASE_SECRET_KEY` | For protected workflows | Server-only alert, action, timeline, and report access |
+| `SUPABASE_SECRET_KEY` | For protected workflows and the predictive agent | Server-only assessment, evidence-request, alert, action, timeline, and report access |
 | `ALLOWED_ORIGINS` | Yes | Dashboard origins allowed by CORS |
 | `BACKEND_PORT` | No | Local API port used by launch scripts; default `8000`, with `8001` and `8002` supported as alternatives |
 | `AI_PROVIDER` | No | `deterministic`, `groq`, or `huggingface` |

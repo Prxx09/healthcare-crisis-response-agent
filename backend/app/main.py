@@ -16,7 +16,8 @@ from .alert_service import generate_eligible_alerts
 from .email_alerts import EmailAlertScheduler, next_scheduled_at, normalize_emails, resolve_timezone, run_email_alert, send_incident_review_notifications, send_task_owner_notifications
 from .forecast_engine import build_scenarios
 from .investigation_engine import investigate_cluster
-from .models import ActionUpdateRequest, AlertDecisionRequest, AlertGenerationRequest, EmailAlertConfigRequest, EmailAlertSendRequest
+from .models import ActionUpdateRequest, AlertDecisionRequest, AlertGenerationRequest, EmailAlertConfigRequest, EmailAlertSendRequest, PredictiveAssessmentRequest, FollowupCompletionRequest
+from .predictive_agent import run_predictive_agent
 from .playbook_documents import MAX_FILE_BYTES, SUPPORTED_EXTENSIONS, parse_playbook_document
 from .pinecone_rag import select_response_plan_with_rag
 from .orchestrator import run_workflow
@@ -32,8 +33,40 @@ email_scheduler = EmailAlertScheduler(settings)
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     email_scheduler.start()
+    reassessment_task = asyncio.create_task(_reassess_when_new_data()) if settings.supabase_secret_key else None
     yield
+    if reassessment_task:
+        reassessment_task.cancel()
+        try:
+            await reassessment_task
+        except asyncio.CancelledError:
+            pass
     await email_scheduler.stop()
+
+
+async def _reassess_when_new_data() -> None:
+    """Recheck watched scopes only when newer surveillance data is available."""
+    while True:
+        await asyncio.sleep(300)
+        try:
+            repository = SupabaseRepository()
+            due = await repository.get_due_assessments(datetime.now(timezone.utc).isoformat())
+            seen: set[tuple[str, str]] = set()
+            for item in due:
+                scope = (item["hospital_code"], item["condition_code"])
+                if scope in seen:
+                    continue
+                seen.add(scope)
+                latest = await repository.get_latest_observation_date(*scope)
+                if not latest or latest <= item["analysis_date"]:
+                    continue
+                if await repository.get_latest_assessment(*scope, latest):
+                    continue
+                await create_predictive_assessment(PredictiveAssessmentRequest(
+                    analysis_date=date.fromisoformat(latest), hospital_code=scope[0], condition_code=scope[1]
+                ))
+        except Exception:
+            logger.exception("Scheduled predictive reassessment failed; next poll will retry")
 
 
 app = FastAPI(title="Healthcare Crisis Prediction and Response Agent API", version="0.1.0", lifespan=lifespan)
@@ -48,6 +81,64 @@ async def health() -> dict[str, str]:
 @app.get("/api/v1/hospitals")
 async def hospitals() -> list[dict]:
     return await SupabaseRepository().get_hospitals()
+
+
+@app.get("/api/v1/predictive-assessments/latest")
+async def latest_predictive_assessment(analysis_date: date, hospital_code: str, condition_code: str) -> dict:
+    repository = SupabaseRepository()
+    try:
+        assessment = await repository.get_latest_assessment(hospital_code, condition_code, analysis_date.isoformat())
+        requests = await repository.get_followup_requests(hospital_code, condition_code, analysis_date.isoformat())
+    except (httpx.HTTPError, RuntimeError) as error:
+        raise HTTPException(status_code=502, detail="Unable to read predictive assessment") from error
+    return {"assessment": assessment, "requests": requests}
+
+
+@app.post("/api/v1/predictive-assessments")
+async def create_predictive_assessment(request: PredictiveAssessmentRequest) -> dict:
+    repository = SupabaseRepository()
+    if not repository.secret_key:
+        raise HTTPException(status_code=503, detail="SUPABASE_SECRET_KEY is required for agent actions")
+    try:
+        result = await run_predictive_agent(
+            repository, settings, request.analysis_date, request.hospital_code, request.condition_code
+        )
+        prior = await repository.get_followup_requests(request.hospital_code, request.condition_code, request.analysis_date.isoformat())
+        result["prior_requests"] = [{"request_key": item["request_key"], "status": item["status"], "completion_note": item["completion_note"]} for item in prior]
+        already_requested = {item["request_key"] for item in prior}
+        result["followups"] = [item for item in result["followups"] if item["request_key"] not in already_requested]
+        assessment = await repository.create_assessment(result)
+        now = datetime.now(timezone.utc)
+        for followup in result["followups"]:
+            await repository.create_followup_request({
+                "assessment_id": assessment["id"], "analysis_date": request.analysis_date.isoformat(),
+                "hospital_code": request.hospital_code, "condition_code": request.condition_code,
+                "request_key": followup["request_key"], "owner_role": followup["owner_role"],
+                "request_text": followup["request_text"],
+                "due_at": (now + timedelta(hours=followup["due_hours"])).isoformat(),
+            })
+        requests = await repository.get_followup_requests(request.hospital_code, request.condition_code, request.analysis_date.isoformat())
+        return {"assessment": assessment, "requests": requests}
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except (httpx.HTTPError, RuntimeError) as error:
+        logger.exception("Predictive assessment failed")
+        raise HTTPException(status_code=502, detail="Unable to complete predictive assessment") from error
+
+
+@app.patch("/api/v1/agent-followups/{request_id}")
+async def complete_agent_followup(request_id: int, request: FollowupCompletionRequest) -> dict:
+    repository = SupabaseRepository()
+    try:
+        existing = await repository.get_followup_request(request_id)
+        if not existing:
+            raise HTTPException(status_code=404, detail="Request not found")
+        updated = await repository.complete_followup_request(request_id, request.note)
+        if not updated:
+            raise HTTPException(status_code=409, detail="Request was already completed")
+        return updated
+    except (httpx.HTTPError, RuntimeError) as error:
+        raise HTTPException(status_code=502, detail="Unable to update evidence request") from error
 
 
 @app.get("/api/v1/conditions")

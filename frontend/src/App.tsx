@@ -4,7 +4,7 @@ import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, X
 import { api } from "./api";
 import { EmailAlertsPage } from "./EmailAlertsPage";
 import { NotificationBanner } from "./NotificationBanner";
-import type { AlertRecord, Cluster, Condition, EvidenceBriefing, ForecastBriefing, ForecastResponse, IncidentAction, IncidentTimeline, InvestigationResponse, Observation, PlaybookLibrary, PlaybookValidation, Hospital, ResponsePlan, SignalResponse, WorkflowRun } from "./types";
+import type { AlertRecord, Cluster, Condition, EvidenceBriefing, ForecastBriefing, ForecastResponse, IncidentAction, IncidentTimeline, InvestigationResponse, Observation, PlaybookLibrary, PlaybookValidation, Hospital, ResponsePlan, SignalResponse, WorkflowRun, PredictiveAgentState } from "./types";
 
 const SOURCE_LABELS: Record<string, string> = { visits: "Visits", lab_positives: "Lab positives", pharmacy_demand: "Pharmacy demand" };
 type View = "dashboard" | "alerts" | "actions" | "playbooks" | "emails";
@@ -97,6 +97,11 @@ export default function App() {
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [timeline, setTimeline] = useState<IncidentTimeline | null>(null);
+  const [predictiveAgent, setPredictiveAgent] = useState<PredictiveAgentState | null>(null);
+  const [agentScope, setAgentScope] = useState("");
+  const [agentBusy, setAgentBusy] = useState(false);
+  const [agentError, setAgentError] = useState<string | null>(null);
+  const [followupNotes, setFollowupNotes] = useState<Record<number, string>>({});
 
   useEffect(() => {
     const canonicalPath = PAGE_PATHS[viewFromPath(window.location.pathname)];
@@ -128,6 +133,16 @@ export default function App() {
 
   useEffect(() => {
     if (!analysisDate) return;
+    const scope = `${analysisDate}|${hospital}|${condition}`;
+    setPredictiveAgent(null);
+    setAgentScope("");
+    setAgentError(null);
+    let cancelled = false;
+    if (hospital !== "all" && condition !== "all") {
+      api.latestPredictiveAssessment(analysisDate, hospital, condition)
+        .then((result) => { if (!cancelled) { setPredictiveAgent(result); setAgentScope(scope); } })
+        .catch(() => { if (!cancelled) setAgentError("Saved agent assessments could not be loaded."); });
+    }
     const hasSpecificScope = hospital !== "all" && condition !== "all";
     setLoading(true);
     setError(null);
@@ -159,7 +174,36 @@ export default function App() {
       .then(([observationData, signalData, forecastData, investigationData, workflowData]) => { setObservations(observationData); setSignals(signalData); setForecast(forecastData); setInvestigation(investigationData); setWorkflow(workflowData); })
       .catch(() => setError("The surveillance API is unavailable. Confirm that the FastAPI service is running."))
       .finally(() => setLoading(false));
+    return () => { cancelled = true; };
   }, [analysisDate, condition, hospital, refreshKey]);
+
+  async function runAgent() {
+    if (!analysisDate || hospital === "all" || condition === "all") return;
+    setAgentBusy(true);
+    setAgentError(null);
+    try {
+      const result = await api.runPredictiveAgent(analysisDate, hospital, condition);
+      setPredictiveAgent(result);
+      setAgentScope(`${analysisDate}|${hospital}|${condition}`);
+    } catch (reason) {
+      setAgentError(reason instanceof Error ? reason.message : "The agent could not complete its assessment.");
+    } finally { setAgentBusy(false); }
+  }
+
+  async function completeFollowup(id: number) {
+    const note = followupNotes[id]?.trim();
+    if (!note || note.length < 3) { setAgentError("Add a brief result before completing the request."); return; }
+    setAgentBusy(true);
+    setAgentError(null);
+    try {
+      await api.completeAgentFollowup(id, note);
+      const result = await api.runPredictiveAgent(analysisDate, hospital, condition);
+      setPredictiveAgent(result);
+      setAgentScope(`${analysisDate}|${hospital}|${condition}`);
+    } catch (reason) {
+      setAgentError(reason instanceof Error ? reason.message : "The request could not be completed.");
+    } finally { setAgentBusy(false); }
+  }
 
   useEffect(() => {
     if (view !== "alerts") return;
@@ -373,7 +417,7 @@ export default function App() {
     const expectedEnd = expected.points.at(-1)?.projected_visits ?? forecast.latest_visits;
     const bestEnd = best.points.at(-1)?.projected_visits ?? forecast.latest_visits;
     const worstEnd = worst.points.at(-1)?.projected_visits ?? forecast.latest_visits;
-    const expectedChange = forecast.latest_visits ? ((expectedEnd - forecast.latest_visits) / forecast.latest_visits) * 100 : 0;
+    const expectedChange = forecast.planning_anchor_visits ? ((expectedEnd - forecast.planning_anchor_visits) / forecast.planning_anchor_visits) * 100 : 0;
     return { scenarios, expectedEnd, bestEnd, worstEnd, expectedChange };
   }, [forecast]);
 
@@ -427,12 +471,24 @@ export default function App() {
           <article className="card metric"><span>Approval state</span><strong className="approval"><CheckCircle2 size={23} /> Human gate</strong><small>No response is issued automatically</small></article>
         </section>
 
+        {hasSpecificScope && <section className="card predictive-agent-panel">
+          <div className="panel-heading"><div><h2>Predictive investigation agent</h2><p>Checks evidence, challenges the forecast, and creates internal verification requests.</p></div><button className="generate-button" disabled={agentBusy} onClick={runAgent}>{agentBusy ? "Investigating…" : predictiveAgent?.assessment ? "Reassess" : "Run agent"}</button></div>
+          <NotificationBanner message={agentError} onDismiss={() => setAgentError(null)} variant="error" />
+          {agentScope === `${analysisDate}|${hospital}|${condition}` && predictiveAgent?.assessment ? <>
+            <div className="agent-summary"><strong>Assessment: {predictiveAgent.assessment.result.assessment.status}</strong><span>Confidence: {predictiveAgent.assessment.result.assessment.confidence}</span><span>Expected day 7: {predictiveAgent.assessment.result.pressure.expected_day_7_visits} visits</span><span>Recheck by {new Date(predictiveAgent.assessment.next_review_at).toLocaleString()}</span></div>
+            <p>{predictiveAgent.assessment.result.assessment.hypotheses.join(" ")}</p><small>{predictiveAgent.assessment.result.pressure.interpretation}</small>
+            <div className="agent-checks"><h3>Evidence checks chosen by the agent</h3>{predictiveAgent.assessment.result.checks.map((check, index) => <div key={`${check.tool}-${index}`}><strong>{check.tool.replaceAll("_", " ")}</strong><span>{check.reason} · {check.selected_by === "model" ? "AI selected" : "Policy selected"}</span><small>{JSON.stringify(check.result)}</small></div>)}</div>
+            <div className="agent-requests"><h3>Internal evidence requests</h3>{predictiveAgent.requests.length === 0 ? <p>No request needed for this assessment.</p> : predictiveAgent.requests.map((item) => <div key={item.id}><strong>{item.owner_role} · {item.status}</strong><p>{item.request_text}</p><small>Due {new Date(item.due_at).toLocaleString()}</small>{item.status === "open" ? <div className="followup-complete"><input aria-label={`Result for ${item.request_key}`} placeholder="Enter the verified result" value={followupNotes[item.id] ?? ""} onChange={(event) => setFollowupNotes((notes) => ({...notes, [item.id]: event.target.value}))} /><button disabled={agentBusy} onClick={() => completeFollowup(item.id)}>Complete and reassess</button></div> : <p>Result: {item.completion_note}</p>}</div>)}</div>
+            <p className="agent-boundary">{predictiveAgent.assessment.result.approval_boundary}</p>
+          </> : <p>Choose a hospital and disease, then run the agent to create a saved, auditable assessment.</p>}
+        </section>}
+
         {hasSpecificScope && <section className="card forecast-overview">
           <div className="forecast-heading"><div><span className="forecast-eyebrow">Seven-day forecast outlook</span><h2>Planning scenarios for the selected scope</h2><p>{conditions.find((item) => item.code === condition)?.name ?? condition} · {hospitals.find((item) => item.code === hospital)?.name ?? hospital} · From {formatDate(analysisDate)}</p></div><button className="forecast-ai-button" onClick={generateForecastBriefing} disabled={!forecast || forecastBriefingLoading}><Sparkles size={16} /> {forecastBriefingLoading ? "Preparing outlook…" : "Explain with AI"}</button></div>
           {forecast && forecastSummary ? <>
             <div className="forecast-kpis">
               <article><span>Latest visits</span><strong>{forecast.latest_visits.toLocaleString()}</strong><small>Observed on analysis date</small></article>
-              <article><span>Expected day 7</span><strong>{forecastSummary.expectedEnd.toLocaleString()}</strong><small className={forecastSummary.expectedChange > 0 ? "up" : forecastSummary.expectedChange < 0 ? "down" : ""}>{forecastSummary.expectedChange >= 0 ? "+" : ""}{forecastSummary.expectedChange.toFixed(1)}% from latest</small></article>
+              <article><span>Expected day 7</span><strong>{forecastSummary.expectedEnd.toLocaleString()}</strong><small className={forecastSummary.expectedChange > 0 ? "up" : forecastSummary.expectedChange < 0 ? "down" : ""}>{forecastSummary.expectedChange >= 0 ? "+" : ""}{forecastSummary.expectedChange.toFixed(1)}% from 3-day median</small></article>
               <article><span>Day-7 planning range</span><strong>{forecastSummary.bestEnd.toLocaleString()}–{forecastSummary.worstEnd.toLocaleString()}</strong><small>Best to upper-stress scenario</small></article>
               <article><span>Recent weekly change</span><strong>{forecast.observed_weekly_change_pct >= 0 ? "+" : ""}{forecast.observed_weekly_change_pct}%</strong><small>Recent 7 days vs previous 7</small></article>
             </div>

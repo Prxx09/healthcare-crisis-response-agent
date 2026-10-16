@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import date, timedelta
-from statistics import mean
+from statistics import median
 from typing import Any
 
 
@@ -17,11 +17,14 @@ def build_scenarios(rows: list[dict[str, Any]], analysis_date: date, horizon_day
     if latest is None:
         raise ValueError("No visit observation exists for the selected analysis date")
 
-    recent = [visits_by_date.get(analysis_date - timedelta(days=offset), 0) for offset in range(1, 8)]
-    previous = [visits_by_date.get(analysis_date - timedelta(days=offset), 0) for offset in range(8, 15)]
-    recent_mean = mean(recent)
-    previous_mean = mean(previous)
-    observed_growth = (recent_mean - previous_mean) / previous_mean if previous_mean else 0.0
+    recent = [visits_by_date[analysis_date - timedelta(days=offset)] for offset in range(0, 7) if analysis_date - timedelta(days=offset) in visits_by_date]
+    previous = [visits_by_date[analysis_date - timedelta(days=offset)] for offset in range(7, 14) if analysis_date - timedelta(days=offset) in visits_by_date]
+    if len(recent) < 5 or len(previous) < 5:
+        raise ValueError("At least five reported visit days are required in each comparison week")
+    recent_median = median(recent)
+    previous_median = median(previous)
+    observed_growth = (recent_median - previous_median) / previous_median if previous_median else 0.0
+    planning_anchor = round(median(recent[:3]))
     expected_rate = max(-0.08, min(0.12, observed_growth / 7))
     rates = {
         "best_case": max(-0.15, expected_rate - 0.05),
@@ -33,7 +36,7 @@ def build_scenarios(rows: list[dict[str, Any]], analysis_date: date, horizon_day
     for name, daily_rate in rates.items():
         points = []
         for day_number in range(horizon_days + 1):
-            projected = round(latest * ((1 + daily_rate) ** day_number))
+            projected = latest if day_number == 0 else round(planning_anchor * ((1 + daily_rate) ** day_number))
             points.append({
                 "date": (analysis_date + timedelta(days=day_number)).isoformat(),
                 "projected_visits": max(0, projected),
@@ -48,11 +51,14 @@ def build_scenarios(rows: list[dict[str, Any]], analysis_date: date, horizon_day
         "analysis_date": analysis_date.isoformat(),
         "horizon_days": horizon_days,
         "latest_visits": latest,
+        "planning_anchor_visits": planning_anchor,
         "observed_weekly_change_pct": round(observed_growth * 100, 1),
         "scenarios": scenarios,
         "assumptions": [
             "Visit counts are used as the primary demand indicator.",
-            "Recent seven-day activity is compared with the preceding seven days.",
+            "The median of the most recent seven reported days is compared with the preceding seven-day median.",
+            "Future values start from the latest three-day median, limiting the effect of a single-day spike.",
+            "At least five reported days in each comparison week are required; missing days are never treated as zero.",
             "Daily growth is bounded to avoid implausible short-term projections.",
             "Scenarios support planning and are not epidemiological predictions.",
         ],

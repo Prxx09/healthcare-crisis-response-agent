@@ -62,3 +62,9 @@ Investigation and forecasting execute concurrently after signal analysis. The wo
 - Hospital operations snapshots show capacity; they do not explain why disease activity changed.
 - No map/GeoJSON interface, frontend authentication, application RBAC, Microsoft Graph integration or automatic playbook activation is implemented.
 - The workflow runs locally with Microsoft Agent Framework Core. It is not deployed as a hosted Microsoft Foundry agent.
+
+## Predictive investigation and internal coordination
+
+For a selected hospital, disease, and analysis date, the user can run the predictive agent. The visit scenario uses reported days and a three-day median anchor so one spike cannot dictate the trajectory. The agent selects up to four checks from historical visits, lab positives, reporting quality, pharmacy demand, and hospital readiness. Groq or Hugging Face can choose the next read-only check when configured; a bounded policy continues the investigation if the model is unavailable. Each choice, reason, and result is saved in Supabase.
+
+The agent looks for conflicting lab trends and incomplete reporting before giving an operational assessment. It may create an internal request for a laboratory, surveillance, or operations lead to verify missing evidence. Requests are deduplicated by hospital, disease, date, and purpose. Completing a request saves the result and triggers a fresh assessment in the dashboard. Forecasts are planning scenarios, not admission predictions or diagnoses. Incident Commander approval is still required for controlled response actions.

@@ -36,3 +36,13 @@ class EmailAlertConfigRequest(BaseModel):
 
 class EmailAlertSendRequest(BaseModel):
     analysis_date: date | None = None
+
+
+class PredictiveAssessmentRequest(BaseModel):
+    analysis_date: date
+    hospital_code: str = Field(pattern=r"^[a-z0-9_]+$", max_length=80)
+    condition_code: Literal["ili", "age", "dengue"]
+
+
+class FollowupCompletionRequest(BaseModel):
+    note: str = Field(min_length=3, max_length=500)

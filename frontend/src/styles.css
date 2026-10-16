@@ -248,3 +248,14 @@ button:disabled { cursor: not-allowed; }
   .evidence-card-actions { flex-direction: column; }
   .case-briefing-dropdown summary { align-items: flex-start; flex-direction: column; gap: 5px; }
 }
+
+.predictive-agent-panel { display: grid; gap: 16px; }
+.agent-summary { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.agent-summary > * { background: #edf4fa; border-radius: 8px; padding: 8px 12px; color: #174369; }
+.agent-checks, .agent-requests { display: grid; gap: 10px; }
+.agent-checks h3, .agent-requests h3 { margin: 0; font-size: 1rem; }
+.agent-checks > div, .agent-requests > div { display: grid; gap: 6px; padding: 12px; border: 1px solid #dce6ef; border-radius: 10px; }
+.agent-checks small { overflow-wrap: anywhere; color: #526477; }
+.followup-complete { display: flex; flex-wrap: wrap; gap: 8px; }
+.followup-complete input { min-width: 220px; flex: 1; padding: 8px; border: 1px solid #b6c8da; border-radius: 6px; }
+.agent-boundary { padding: 10px 12px; border-left: 3px solid #d99c34; background: #fff9ed; }

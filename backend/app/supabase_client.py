@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+from datetime import datetime, timezone
 
 import httpx
 
@@ -60,7 +61,7 @@ class SupabaseRepository:
     async def get_conditions(self) -> list[dict[str, Any]]:
         return await self.get("conditions", {"select": "id,code,name,syndrome_group", "active": "eq.true", "order": "name"})
 
-    async def get_observations(self, start_date: str, end_date: str, hospital_code: str | None = None, condition_code: str | None = None) -> list[dict[str, Any]]:
+    async def get_observations(self, start_date: str, end_date: str, hospital_code: str | None = None, condition_code: str | None = None, signal_source: str | None = None) -> list[dict[str, Any]]:
         params = {
             "select": "observation_date,signal_source,observation_count,coverage_pct,data_quality,hospitals!inner(code,name),conditions!inner(code,name)",
             "observation_date": f"gte.{start_date}",
@@ -72,7 +73,59 @@ class SupabaseRepository:
             params["hospitals.code"] = f"eq.{hospital_code}"
         if condition_code:
             params["conditions.code"] = f"eq.{condition_code}"
+        if signal_source:
+            params["signal_source"] = f"eq.{signal_source}"
         return await self.get("surveillance_observations", params)
+
+    async def create_assessment(self, result: dict[str, Any]) -> dict[str, Any]:
+        rows = await self.post("predictive_assessments", {
+            "analysis_date": result["analysis_date"],
+            "hospital_code": result["hospital_code"],
+            "condition_code": result["condition_code"],
+            "risk_level": result["assessment"]["status"],
+            "next_review_at": result["next_review_at"],
+            "result": result,
+        })
+        if not rows:
+            raise RuntimeError("Assessment was not saved")
+        return rows[0]
+
+    async def get_latest_assessment(self, hospital_code: str, condition_code: str, analysis_date: str) -> dict[str, Any] | None:
+        rows = await self.privileged_get("predictive_assessments", {
+            "select": "id,analysis_date,hospital_code,condition_code,risk_level,next_review_at,result,created_at",
+            "hospital_code": f"eq.{hospital_code}", "condition_code": f"eq.{condition_code}",
+            "analysis_date": f"eq.{analysis_date}", "order": "created_at.desc,id.desc", "limit": "1",
+        })
+        return rows[0] if rows else None
+
+    async def get_followup_requests(self, hospital_code: str, condition_code: str, analysis_date: str) -> list[dict[str, Any]]:
+        return await self.privileged_get("agent_followup_requests", {
+            "select": "id,request_key,owner_role,request_text,due_at,status,completion_note,created_at,updated_at",
+            "hospital_code": f"eq.{hospital_code}", "condition_code": f"eq.{condition_code}",
+            "analysis_date": f"eq.{analysis_date}", "order": "created_at.asc",
+        })
+
+    async def create_followup_request(self, payload: dict[str, Any]) -> dict[str, Any] | None:
+        try:
+            rows = await self.post("agent_followup_requests", payload)
+        except httpx.HTTPStatusError as error:
+            if error.response.status_code == 409:
+                return None
+            raise
+        return rows[0] if rows else None
+
+    async def get_followup_request(self, request_id: int) -> dict[str, Any] | None:
+        rows = await self.privileged_get("agent_followup_requests", {
+            "select": "id,hospital_code,condition_code,analysis_date,status",
+            "id": f"eq.{request_id}", "limit": "1",
+        })
+        return rows[0] if rows else None
+
+    async def complete_followup_request(self, request_id: int, note: str) -> dict[str, Any] | None:
+        rows = await self.patch("agent_followup_requests", {"id": f"eq.{request_id}", "status": "eq.open"}, {
+            "status": "completed", "completion_note": note, "updated_at": datetime.now(timezone.utc).isoformat(),
+        })
+        return rows[0] if rows else None
 
     async def get_hospital_context(self, start_date: str, end_date: str, hospital_code: str) -> list[dict[str, Any]]:
         return await self.get("hospital_context", {
@@ -139,13 +192,24 @@ class SupabaseRepository:
     async def update_action(self, action_id: int, payload: dict[str, Any]) -> list[dict[str, Any]]:
         return await self.patch("incident_actions", {"id": f"eq.{action_id}"}, payload)
 
-    async def get_latest_observation_date(self) -> str | None:
-        rows = await self.get("surveillance_observations", {
-            "select": "observation_date",
+    async def get_latest_observation_date(self, hospital_code: str | None = None, condition_code: str | None = None) -> str | None:
+        params = {
+            "select": "observation_date,hospitals!inner(code),conditions!inner(code)",
             "order": "observation_date.desc",
             "limit": "1",
-        })
+        }
+        if hospital_code:
+            params["hospitals.code"] = f"eq.{hospital_code}"
+        if condition_code:
+            params["conditions.code"] = f"eq.{condition_code}"
+        rows = await self.get("surveillance_observations", params)
         return rows[0]["observation_date"] if rows else None
+
+    async def get_due_assessments(self, now: str) -> list[dict[str, Any]]:
+        return await self.privileged_get("predictive_assessments", {
+            "select": "id,analysis_date,hospital_code,condition_code,next_review_at",
+            "next_review_at": f"lte.{now}", "order": "created_at.desc,id.desc", "limit": "100",
+        })
 
     async def get_email_alert_config(self) -> dict[str, Any]:
         rows = await self.privileged_get("email_alert_config", {"select": "*", "id": "eq.1", "limit": "1"})

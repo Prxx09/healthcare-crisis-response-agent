@@ -1,4 +1,4 @@
-import type { AlertRecord, Condition, EmailAlertConfig, EmailAlertDashboard, EvidenceBriefing, ForecastBriefing, ForecastResponse, IncidentAction, IncidentTimeline, InvestigationResponse, Observation, PlaybookLibrary, PlaybookValidation, Hospital, ResponsePlan, SignalResponse, WorkflowRun } from "./types";
+import type { AlertRecord, Condition, EmailAlertConfig, EmailAlertDashboard, EvidenceBriefing, ForecastBriefing, ForecastResponse, IncidentAction, IncidentTimeline, InvestigationResponse, Observation, PlaybookLibrary, PlaybookValidation, Hospital, ResponsePlan, SignalResponse, WorkflowRun, PredictiveAgentState, AgentFollowup } from "./types";
 
 const API_URL = (import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000").replace(/\/$/, "");
 
@@ -22,6 +22,12 @@ async function sendJson<T>(path: string, method: "POST" | "PUT" | "PATCH", body:
 }
 
 export const api = {
+  latestPredictiveAssessment: (analysisDate: string, hospital: string, condition: string) =>
+    getJson<PredictiveAgentState>(`/api/v1/predictive-assessments/latest?${new URLSearchParams({analysis_date: analysisDate, hospital_code: hospital, condition_code: condition})}`),
+  runPredictiveAgent: (analysisDate: string, hospital: string, condition: string) =>
+    sendJson<PredictiveAgentState>("/api/v1/predictive-assessments", "POST", {analysis_date: analysisDate, hospital_code: hospital, condition_code: condition}),
+  completeAgentFollowup: (id: number, note: string) =>
+    sendJson<AgentFollowup>(`/api/v1/agent-followups/${id}`, "PATCH", {note}),
   hospitals: () => getJson<Hospital[]>("/api/v1/hospitals"),
   conditions: () => getJson<Condition[]>("/api/v1/conditions"),
   dataAvailability: () => getJson<{ latest_date: string }>("/api/v1/data-availability"),

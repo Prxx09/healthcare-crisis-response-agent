@@ -552,3 +552,7 @@ Every workflow execution produces a `WorkflowRun` object with fine-grained execu
 | `api.ts` | Type-Safe Client API | `getJson()`, `sendJson()`, `api` | Fetch $\rightarrow$ Typed UI State |
 | `App.tsx` | Dashboard & Mission Control| `App` component | UI State $\rightarrow$ Rendered Analytics & Actions |
 | `EmailAlertsPage.tsx`| Email Configuration UI | `EmailAlertsPage` component | Settings Form $\rightarrow$ Saved Email Config |
+
+## Predictive investigation agent
+
+`backend/app/predictive_agent.py` contains the bounded evidence-seeking loop. Its tool catalogue is read-only and its pressure label is a transparent heuristic based on visit scenarios and hospital readiness. `POST /api/v1/predictive-assessments` saves the assessment before creating deduplicated internal verification requests. `PATCH /api/v1/agent-followups/{id}` records a human result; the dashboard then reruns the assessment. The two new protected tables and indexes are defined in `supabase/migrations/20261016_predictive_agent.sql`. No public RLS policies exist for these tables; the FastAPI server uses its secret key for reads and writes.
