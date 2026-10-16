@@ -15,6 +15,8 @@ All records are synthetic and aggregated. The dataset contains no patient names,
 - **Conditions:** Influenza-like illness (ILI), acute gastroenteritis (AGE), and dengue
 - **Records:** 12,096 surveillance observations and 1,512 hospital operations snapshots
 
+The Supabase demonstration extends this base dataset through **16 October 2026** using `supabase/demo_20261014_16.sql`. It adds 96 observations and 12 operations snapshots, for **12,192** and **1,524** records respectively. The local CSV generator still creates the original 378-day base.
+
 ## Files and tables
 
 | File / table | Purpose |
@@ -41,6 +43,8 @@ The data includes three transparent patterns so the detection workflow can be de
 3. A gradual increase in suspected dengue visits at East Hospital.
 
 These patterns are illustrative signals, not simulated real-world outbreaks.
+
+The three-day continuation provides focused agent examples: Central Hospital / ILI has increasing visits, lab positives, and pharmacy demand alongside readiness pressure; Lakeside Hospital / AGE has rising visits with flat recent laboratory positives; North Hospital / ILI has three days of partial visit reporting. Choose 16 October 2026 in the dashboard to inspect these cases.
 
 ## Reproducibility
 

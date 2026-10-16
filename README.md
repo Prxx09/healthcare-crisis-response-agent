@@ -14,7 +14,7 @@ The current implementation covers three conditions selected for shared data stru
 | Acute gastroenteritis (AGE) | Visits, laboratory positives, pharmacy demand | Hospital capacity and supplies |
 | Dengue | Suspected visits, laboratory positives | Hospital capacity and staffing |
 
-The system monitors four simulated hospitals from 1 October 2025 through 13 October 2026. Counts represent observations at each hospital; they do not imply a geographic outbreak.
+The system monitors four simulated hospitals from 1 October 2025 through 16 October 2026 in Supabase. Counts represent observations at each hospital; they do not imply a geographic outbreak.
 
 ## Workflow
 
@@ -243,7 +243,9 @@ Interactive request and response schemas are available through FastAPI at `/docs
 - Hospital: `ap-south-1`
 - Project reference: `jinbmggobfeccvqrnnze`
 
-The database contains four simulated hospitals, three monitored conditions, 12,096 surveillance observations, and 1,512 hospital operations snapshots. Schema changes are tracked in `supabase/migrations/`.
+The database contains four simulated hospitals, three monitored conditions, 12,192 surveillance observations, and 1,524 hospital operations snapshots after applying `supabase/demo_20261014_16.sql`. Schema changes are tracked in `supabase/migrations/`. The separate demo SQL can be rerun safely on the same synthetic run ID.
+
+For the predictive agent demo, choose **16 October 2026** and run the agent for **Central Hospital / ILI** (corroborated rise and readiness pressure), **Lakeside Hospital / AGE** (visits rise while laboratory positives remain flat), or **North Hospital / ILI** (partial visit reporting). The API backend needs `SUPABASE_SECRET_KEY` to save assessments and create internal verification requests.
 
 ## Final environment configuration
 
