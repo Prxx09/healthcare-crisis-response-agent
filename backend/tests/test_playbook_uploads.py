@@ -156,6 +156,32 @@ class UploadTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(repo.privileged_get.call_args.args[1]['active'],'eq.true')
         self.assertEqual(repo.privileged_get.call_args.args[1]['status'],'eq.indexed')
 
+    def test_first_upload_skips_cleanup_and_creates_vectors(self):
+        client=MagicMock();client.inference.embed.return_value={'data':[{'values':[0.1]}]}
+        index=MagicMock();index.describe_index_stats.return_value={'namespaces':{},'dimension':1}
+        a={'action_id':'0','condition_code':'dengue','alert_level':'monitor','action':'Check reports','owner':'Surveillance lead','timeframe':'within 24 hours'}
+        with patch('app.playbook_uploads._pinecone_client',return_value=client),patch('app.playbook_uploads._index',return_value=index):
+            self.assertEqual(index_actions(settings(),{'id':'doc','index_namespace':'new','actions':[a]}),1)
+        index.delete.assert_not_called()
+        index.upsert.assert_called_once()
+        self.assertEqual(index.upsert.call_args.kwargs['namespace'],'new')
+
+    def test_retry_only_clears_the_existing_document_namespace(self):
+        client=MagicMock();index=MagicMock()
+        index.describe_index_stats.return_value={'namespaces':{'existing':{'vector_count':9},'other':{'vector_count':5}}}
+        with patch('app.playbook_uploads._pinecone_client',return_value=client),patch('app.playbook_uploads._index',return_value=index):
+            index_actions(settings(),{'id':'doc','index_namespace':'existing','actions':[]})
+        index.delete.assert_called_once_with(delete_all=True,namespace='existing')
+
+    def test_missing_index_is_not_silently_ignored(self):
+        client=MagicMock();index=MagicMock()
+        error=Exception('missing index');error.status=404
+        index.describe_index_stats.side_effect=error
+        with patch('app.playbook_uploads._pinecone_client',return_value=client),patch('app.playbook_uploads._index',return_value=index):
+            with self.assertRaisesRegex(RuntimeError,r'Index/namespace lookup failed: Exception \(HTTP 404\)'):
+                index_actions(settings(),{'id':'doc','index_namespace':'new','actions':[]})
+        index.upsert.assert_not_called()
+
     def test_batch_embedding_and_source_lineage(self):
         a = {'action_id':'1','condition_code':'dengue','alert_level':'investigate','action':'Verify tests','owner':'Lab lead','timeframe':'After review','category':'investigation'}
         client=MagicMock();client.inference.embed.return_value={'data':[{'values':[0.1]}]};index=MagicMock()

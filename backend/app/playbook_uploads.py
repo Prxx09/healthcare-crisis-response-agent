@@ -146,17 +146,33 @@ async def extract_actions(filename: str, data: bytes, text: str, settings: Setti
     return result, method
 
 
+def _index_operation(label: str, operation, **kwargs):
+    try:
+        return operation(**kwargs)
+    except Exception as error:
+        status = getattr(error, "status", None)
+        suffix = f" (HTTP {status})" if isinstance(status, int) else ""
+        raise RuntimeError(f"{label}: {type(error).__name__}{suffix}. Check the configured index host and backend logs.") from error
+
+
 def index_actions(settings: Settings, document: dict) -> int:
     client = _pinecone_client(settings)
     index = _index(settings, client)
     # Unique document namespace makes retries/reindexing idempotent and prevents partial indexes leaking into retrieval.
     namespace = document["index_namespace"]
-    index.delete(delete_all=True, namespace=namespace)
+    stats = _index_operation("Index/namespace lookup failed", index.describe_index_stats)
+    namespaces = _match_value(stats, "namespaces", {}) or {}
+    # Pinecone creates namespaces on upsert. Clearing a brand-new namespace can
+    # return 404, so only clear a namespace reported by this index. Other errors
+    # remain visible (including a missing index or incorrect host).
+    if namespace in namespaces:
+        _index_operation("Existing namespace cleanup failed", index.delete, delete_all=True, namespace=namespace)
+    dimension = _match_value(stats, "dimension")
     actions = document["actions"]
     for start in range(0, len(actions), 32):
         batch = actions[start:start + 32]
         texts = [f"{a['condition_code']} {a['alert_level']}. {a['action']} Owner: {a['owner']}. Timeframe: {a['timeframe']}." for a in batch]
-        embeddings = client.inference.embed(model=settings.pinecone_embedding_model, inputs=texts, parameters={"input_type": "passage", "truncate": "END"})
+        embeddings = _index_operation("Embedding generation failed", client.inference.embed, model=settings.pinecone_embedding_model, inputs=texts, parameters={"input_type": "passage", "truncate": "END"})
         embedded = _match_value(embeddings, "data", [])
         if len(embedded) != len(batch):
             raise RuntimeError("Pinecone did not return an embedding for every action")
@@ -165,11 +181,13 @@ def index_actions(settings: Settings, document: dict) -> int:
             values = _match_value(embedding, "values", [])
             if not values:
                 raise RuntimeError("Pinecone returned an empty embedding")
+            if isinstance(dimension, int) and len(values) != dimension:
+                raise RuntimeError(f"Embedding dimension {len(values)} does not match index dimension {dimension}")
             vectors.append({"id": action["action_id"], "values": list(values), "metadata": {
                 "document_id": document["id"], "condition_code": action["condition_code"],
                 "alert_level": action["alert_level"], "text": text,
             }})
-        index.upsert(vectors=vectors, namespace=namespace)
+        _index_operation("Vector upload failed", index.upsert, vectors=vectors, namespace=namespace)
     return len(actions)
 
 
