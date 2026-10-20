@@ -195,7 +195,7 @@ async def select_response_plan_with_rag(
     alert_level: str,
     query_context: str | None = None,
 ) -> dict[str, Any]:
-    # The static plan remains authoritative. Retrieval only supplies traceable context.
+    # Bundled actions remain a fallback; active uploads provide source-verified actions.
     from .playbook_engine import select_response_plan
 
     plan = select_response_plan(condition_code, alert_level)
@@ -207,4 +207,20 @@ async def select_response_plan_with_rag(
         "matches": retrieval["matches"],
     }
     plan["retrieved_guidance"] = [match["text"] for match in retrieval["matches"] if match.get("text")]
+    plan["action_source"] = "bundled"
+    if settings.pinecone_rag_enabled:
+        try:
+            from .playbook_uploads import uploaded_actions
+            actions = await uploaded_actions(settings, condition_code, alert_level,
+                f"{condition_code} {alert_level}. {query_context or 'Hospital response actions'}")
+            if actions:
+                plan["actions"] = actions
+                plan["playbook_version"] = "uploaded:" + ",".join(sorted({a["source_document_id"][:12] for a in actions}))
+                plan["approval_required"] = True
+                plan["action_source"] = "uploaded"
+                plan["retrieval"]["status"] = "ready"
+            plan["uploaded_retrieval_status"] = "ready" if actions else "no_matches"
+        except Exception:
+            logger.exception("Uploaded playbook retrieval unavailable; using bundled actions")
+            plan["uploaded_retrieval_status"] = "fallback"
     return plan

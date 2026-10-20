@@ -11,3 +11,5 @@ frontend/.env.local
 *.tsbuildinfo
 frontend/vite.config.js
 frontend/vite.config.d.ts
+
+supabase/.temp/

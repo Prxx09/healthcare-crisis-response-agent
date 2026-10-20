@@ -23,6 +23,8 @@ def action_rows(alert_id: int, actions: list[dict[str, Any]], approved_at: datet
             "action_text": action["action"],
             "owner_role": action["owner"],
             "timeframe": action["timeframe"],
+            **({"source_document_id": action["source_document_id"], "source_action_id": action["action_id"]}
+               if action.get("source_document_id") else {}),
             "due_at": _due_at(action["timeframe"], approved_at),
             "status": "pending",
         }

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
@@ -224,7 +225,7 @@ async def response_agent(payload: dict[str, Any]) -> dict[str, Any]:
             payload["settings"],
             payload["condition_code"],
             cluster["level"],
-            query_context=f"Hospital {payload['hospital_code']}; analysis date {payload['analysis_date'].isoformat()}",
+            query_context=json.dumps(cluster)[:4000],
         )
         return {
             "result": result,

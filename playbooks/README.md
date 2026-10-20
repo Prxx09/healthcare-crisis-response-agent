@@ -1,10 +1,10 @@
 # Response playbooks
 
-The active playbook is `response_playbooks.json`. The validation API accepts JSON, YAML, DOCX and PDF files up to 5 MB. Validation does not activate or overwrite a playbook.
+The bundled fallback is `response_playbooks.json`. The Playbook library now uploads, stores and indexes JSON, YAML, DOCX and searchable PDF files up to 5 MB. Review and activation are separate from indexing. See the upload workflow in the root README.
 
 The active package supports optional disease-specific actions through `condition_actions[condition_code][alert_level]`. When present, these actions override the generic `levels` actions for plan generation and Pinecone indexing.
 
-JSON and YAML files must use the same fields as the active playbook. DOCX and PDF files may contain normal human-readable guidance, but must also include a JSON or YAML section between these markers:
+The original validation endpoint expects the package schema below, with markers in DOCX/PDF. The new upload endpoint also accepts ordinary prose without markers and uses the configured LLM to extract source-supported actions:
 
 ```text
 PLAYBOOK_DATA_START
@@ -34,7 +34,7 @@ Every severity level must contain at least one shared action. `condition_actions
 
 ## Pinecone RAG
 
-The backend can optionally index the approved playbook in Pinecone and retrieve relevant shared actions, disease-specific actions, and condition guidance for the selected condition and alert level. Retrieval is supplementary: the versioned JSON remains authoritative for executable actions, owners, timeframes, and approval gates.
+The backend can optionally index the approved playbook in Pinecone and retrieve relevant shared actions, disease-specific actions, and condition guidance for the selected condition and alert level. For the bundled package, retrieval adds supporting context. Reviewed and activated uploads can supply recommended actions directly from canonical Supabase records, with source-document traceability. The existing alert approval policy still controls task issuance.
 
 Configure `PINECONE_API_KEY` and the `PINECONE_*` settings in `backend/.env`, install backend requirements, then run from the repository root:
 

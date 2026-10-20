@@ -147,7 +147,7 @@ The backend is written in Python (FastAPI, Pydantic, ReportLab, Pinecone, Groq/H
     - Encodes natural language queries into 1024-dimensional embeddings using `llama-text-embed-v2`.
     - Queries Pinecone serverless indexes with cosine similarity and metadata filters.
   - `select_response_plan_with_rag()`:
-    - Fetches the authoritative deterministic playbook as the primary ground truth.
+    - Uses active uploaded playbooks stored in Supabase for source-verified actions, with the bundled package as fallback.
     - Appends semantically retrieved external SOP passages and contextual guidance into the response payload.
 
 ### 2.10 `backend/app/index_playbooks.py`
@@ -556,3 +556,12 @@ Every workflow execution produces a `WorkflowRun` object with fine-grained execu
 ## Predictive investigation agent
 
 `backend/app/predictive_agent.py` contains the bounded evidence-seeking loop. Its tool catalogue is read-only and its pressure label is a transparent heuristic based on visit scenarios and hospital readiness. `POST /api/v1/predictive-assessments` saves the assessment before creating deduplicated internal verification requests. `PATCH /api/v1/agent-followups/{id}` records a human result; the dashboard then reruns the assessment. The two new protected tables and indexes are defined in `supabase/migrations/20261016_predictive_agent.sql`. No public RLS policies exist for these tables; the FastAPI server uses its secret key for reads and writes.
+
+
+## Playbook upload update — 20 October 2026
+
+`backend/app/playbook_uploads.py` adds source extraction, strict quotation checks for LLM output, hash-based duplicate handling, private Supabase source storage, canonical action records and isolated Pinecone indexing. Ordinary PDF/DOCX/YAML/JSON documents use Groq or Hugging Face when they do not match the existing structured package. Scanned PDFs require OCR before upload. Uploads are indexed automatically but must be reviewed and activated to participate in recommendations.
+
+`frontend/src/PlaybookLibraryPage.tsx` replaces the validation-only page with upload status, source downloads, action review, activation and deactivation. New routes are documented in the root README. `pinecone_rag.py` retrieves active uploaded actions by disease, severity and incident context, verifies IDs against Supabase records, and falls back to bundled guidance if retrieval is unavailable. Task records preserve `source_document_id` and `source_action_id`.
+
+`supabase/playbook_uploads.sql` and its migration define the private library and source bucket. The library is server-access-only with RLS and explicit revocation of public table privileges. No frontend API keys are introduced.

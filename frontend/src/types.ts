@@ -97,6 +97,7 @@ export interface ResponseAction {
   owner: string;
   timeframe: string;
   requires_approval: boolean;
+  source_filename?: string;
 }
 export interface ResponsePlan {
   playbook_version: string;
@@ -112,6 +113,11 @@ export interface PlaybookLibrary {
   supported_formats: string[];
   max_file_bytes: number;
   validation_only: boolean;
+  documents: PlaybookDocument[];
+  uploads_error: string | null;
+  indexing_configured: boolean;
+  ai_configured: boolean;
+  retrieval_enabled: boolean;
 }
 export interface PlaybookValidation {
   valid: boolean;
@@ -231,4 +237,30 @@ export interface PredictiveAgentState {
   assessment: PredictiveAssessment | null;
   requests: AgentFollowup[];
   agent_approval?: { approved: boolean; actions_created: number; owner_notifications: { sent: number; failed: number; skipped: number } };
+}
+
+export interface UploadedPlaybookAction {
+  action_id: string;
+  condition_code: string;
+  alert_level: string;
+  action: string;
+  owner: string;
+  timeframe: string;
+  evidence_quote: string;
+  section: number;
+  review_notes?: string[];
+}
+export interface PlaybookDocument {
+  id: string;
+  filename: string;
+  format: string;
+  size_bytes: number;
+  status: "processing" | "indexed" | "failed";
+  active: boolean;
+  vector_count: number;
+  extraction_method: string | null;
+  error_message: string | null;
+  reviewed_by: string | null;
+  actions: UploadedPlaybookAction[];
+  duplicate?: boolean;
 }

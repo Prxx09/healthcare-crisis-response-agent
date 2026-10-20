@@ -289,3 +289,22 @@ Never use `VITE_` variables for Supabase secret or AI-provider credentials; Vite
 ## Important limitation
 
 This repository demonstrates surveillance, investigation, coordination, and human-gated response using synthetic data. Its outputs must not be used for diagnosis, clinical decisions, public warnings, or declarations of real disease outbreaks.
+
+
+### Uploading response playbooks
+
+Open **Playbook library → Choose playbook**. Upload a searchable PDF, DOCX, YAML or JSON file (up to 5 MB / 60,000 extracted characters). Ordinary prose documents do not need the old `PLAYBOOK_DATA_START` markers. Existing structured packages continue to work without an LLM.
+
+The backend saves the original in the private `playbook-sources` Supabase bucket and stores extracted text, source-supported actions, processing status, reviewer, and vector count in `playbook_documents`. Groq or Hugging Face extracts actions from ordinary documents. Every extracted action must match a quotation in the source; disease and severity labels must be reviewed. Missing owners and timeframes are explicitly flagged. Scanned PDFs require OCR before upload; the system does not guess unreadable content.
+
+Actions are automatically embedded and indexed in Pinecone in a namespace isolated by document hash. An identical indexed file returns the existing record. Failed files can be retried by uploading the same file; abandoned processing attempts can be retried after 15 minutes. Uploads remain inactive until a reviewer checks the original and action list, enters their name and selects **Confirm review and activate**. Deactivation removes a playbook from recommendation eligibility while preserving its records.
+
+With `PINECONE_RAG_ENABLED=true`, recommendations retrieve matching actions by disease, alert level, and available incident context from active uploads. Supabase supplies the canonical action text; Pinecone supplies ranking, never executable instructions. If no uploaded match is available, bundled guidance remains the fallback. Response tasks retain document/action IDs for traceability and follow the existing alert approval policy. This feature does not add a separate user-authentication system; use the same trusted API access model as the existing administration screens.
+
+Backend configuration: `SUPABASE_SECRET_KEY`, `PINECONE_API_KEY`, `PINECONE_INDEX_HOST` (or index name), and the existing embedding model compatible with the index's 1024 dimensions. Ordinary documents also need `AI_PROVIDER=groq` with `GROQ_API_KEY` / `GROQ_MODEL`, or `AI_PROVIDER=huggingface` with `HUGGINGFACE_TOKEN` / `HUGGINGFACE_MODEL`. API keys remain on the server.
+
+The SQL in `supabase/playbook_uploads.sql` provisions the table, private bucket and incident-action source columns; it has been applied to the connected healthcare database. For another database, run the checked-in migration or schema script first. The upload request processes the document synchronously, so deployment request timeouts must allow the extraction/indexing operation to finish.
+
+Endpoints: `POST /api/v1/playbooks/upload?filename=...` accepts the file bytes; `GET /api/v1/playbooks` lists statuses/actions; `PATCH /api/v1/playbooks/{id}/activation` records review and activation; `GET /api/v1/playbooks/{id}/source` downloads the original through the backend. The old validation endpoint is retained.
+
+Verification: `PYTHONPATH=backend python -m unittest discover -s backend/tests -v` and `npm run build --prefix frontend`. Automated ingestion/provider tests use mocked services; verify a real upload with your configured credentials before a demo.

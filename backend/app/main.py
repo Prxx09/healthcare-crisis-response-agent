@@ -3,10 +3,12 @@ from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
 from io import BytesIO
 import logging
+import json
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
+from pydantic import BaseModel, Field
 import httpx
 
 from .config import get_settings
@@ -20,6 +22,7 @@ from .models import ActionUpdateRequest, AlertDecisionRequest, AlertGenerationRe
 from .predictive_agent import AGENT_REVIEWER_NAME, run_predictive_agent
 from .playbook_documents import MAX_FILE_BYTES, SUPPORTED_EXTENSIONS, parse_playbook_document
 from .pinecone_rag import select_response_plan_with_rag
+from .playbook_uploads import TABLE as PLAYBOOK_TABLE, BUCKET as PLAYBOOK_BUCKET, ingest
 from .orchestrator import run_workflow
 from .reporting import build_situation_report, build_timeline
 from .signal_engine import detect_source_signals, summarise_clusters
@@ -64,7 +67,7 @@ async def _approve_alert_from_agent(
         settings,
         condition_code,
         alert["alert_level"],
-        query_context=f"Agent-approved alert {alert['id']}",
+        query_context=json.dumps({"evidence": alert.get("evidence_summary"), "pressure": assessment_result.get("pressure")})[:4000],
     )
     created_actions = await repository.create_actions(action_rows(alert["id"], plan["actions"], decision_time))
     notifications = {"sent": 0, "failed": 0, "skipped": 0}
@@ -315,9 +318,10 @@ async def investigation(
 async def response_plan(
     condition_code: str = Query(...),
     alert_level: str = Query(...),
+    query_context: str | None = Query(default=None, max_length=4000),
 ) -> dict:
     try:
-        return await select_response_plan_with_rag(settings, condition_code, alert_level)
+        return await select_response_plan_with_rag(settings, condition_code, alert_level, query_context)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
@@ -346,7 +350,7 @@ async def briefing(
             settings,
             condition_code,
             cluster["level"],
-            query_context=f"Hospital {hospital_name}; analysis date {analysis_date.isoformat()}",
+            query_context=json.dumps({"cluster": cluster, "readiness": investigation_result.get("hospital_context")})[:4000],
         ) if cluster else None
         evidence = {
             "analysis_date": analysis_date.isoformat(),
@@ -400,25 +404,104 @@ async def workflow(
     return await run_workflow(SupabaseRepository(), settings, analysis_date, hospital_code, condition_code)
 
 
+class PlaybookActivation(BaseModel):
+    active: bool
+    reviewer_name: str = Field(min_length=2, max_length=100)
+
+
 @app.get("/api/v1/playbooks")
 async def playbooks() -> dict:
-    active = await select_response_plan_with_rag(settings, "ili", "monitor")
-    return {
-        "active_version": active["playbook_version"],
+    from .playbook_engine import load_playbooks
+    documents, error = [], None
+    try:
+        documents = await SupabaseRepository().privileged_get(PLAYBOOK_TABLE, {
+            "select": "id,filename,format,size_bytes,status,active,vector_count,extraction_method,error_message,created_at,reviewed_by,actions",
+            "order": "created_at.desc", "limit": "100",
+        })
+    except (RuntimeError, httpx.HTTPError):
+        error = "Upload library unavailable. Configure SUPABASE_SECRET_KEY and apply the playbook schema."
+    return {"active_version": str(load_playbooks()["version"]),
         "supported_formats": sorted(extension.lstrip(".") for extension in SUPPORTED_EXTENSIONS),
-        "max_file_bytes": MAX_FILE_BYTES,
-        "validation_only": True,
-        "rag": active["retrieval"],
-    }
+        "max_file_bytes": MAX_FILE_BYTES, "validation_only": False, "documents": documents,
+        "uploads_error": error, "indexing_configured": bool(settings.pinecone_api_key),
+        "ai_configured": settings.ai_provider != "deterministic", "retrieval_enabled": settings.pinecone_rag_enabled}
+
+
+async def read_playbook_body(request: Request) -> bytes:
+    data = bytearray()
+    async for chunk in request.stream():
+        data.extend(chunk)
+        if len(data) > MAX_FILE_BYTES:
+            raise HTTPException(status_code=413, detail="Playbook files must be 5 MB or smaller")
+    return bytes(data)
 
 
 @app.post("/api/v1/playbooks/validate")
 async def validate_playbook(request: Request, filename: str = Query(..., min_length=1, max_length=180)) -> dict:
-    data = await request.body()
+    data = await read_playbook_body(request)
     try:
         return parse_playbook_document(filename, data)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@app.post("/api/v1/playbooks/upload")
+async def upload_playbook(request: Request, filename: str = Query(..., min_length=1, max_length=180)) -> dict:
+    data = await read_playbook_body(request)
+    try:
+        document = await ingest(SupabaseRepository(), settings, filename, data)
+        # The source text is retained server-side; the UI reviews action quotations.
+        return {key: value for key, value in document.items() if key != "extracted_text"}
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except RuntimeError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except httpx.HTTPError as error:
+        raise HTTPException(status_code=502, detail="Unable to save the playbook. Check Supabase configuration.") from error
+
+
+@app.patch("/api/v1/playbooks/{document_id}/activation")
+async def activate_playbook(document_id: str, request: PlaybookActivation) -> dict:
+    reviewer = request.reviewer_name.strip()
+    if len(reviewer) < 2:
+        raise HTTPException(status_code=400, detail="Enter the reviewer's name")
+    repository = SupabaseRepository()
+    try:
+        rows = await repository.privileged_get(PLAYBOOK_TABLE, {"select": "id,status", "id": f"eq.{document_id}"})
+        if not rows:
+            raise HTTPException(status_code=404, detail="Playbook not found")
+        if request.active and rows[0]["status"] != "indexed":
+            raise HTTPException(status_code=409, detail="Only successfully indexed playbooks can be activated")
+        if request.active:
+            active = await repository.privileged_get(PLAYBOOK_TABLE, {"select": "id", "active": "eq.true"})
+            if len(active) >= 20 and document_id not in {item["id"] for item in active}:
+                raise HTTPException(status_code=409, detail="Deactivate a playbook first; at most 20 can be active")
+        result = await repository.patch(PLAYBOOK_TABLE, {"id": f"eq.{document_id}"}, {
+            "active": request.active, "reviewed_by": reviewer,
+            "reviewed_at": datetime.now(timezone.utc).isoformat(), "updated_at": datetime.now(timezone.utc).isoformat(),
+        })
+        return {key: value for key, value in result[0].items() if key != "extracted_text"}
+    except RuntimeError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except httpx.HTTPError as error:
+        raise HTTPException(status_code=502, detail="Unable to update the playbook") from error
+
+
+@app.get("/api/v1/playbooks/{document_id}/source")
+async def download_playbook_source(document_id: str) -> Response:
+    repository = SupabaseRepository()
+    try:
+        rows = await repository.privileged_get(PLAYBOOK_TABLE, {"select": "storage_path,format", "id": f"eq.{document_id}"})
+        if not rows:
+            raise HTTPException(status_code=404, detail="Playbook not found")
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(f"{settings.supabase_url.rstrip('/')}/storage/v1/object/{PLAYBOOK_BUCKET}/{rows[0]['storage_path']}", headers=repository._write_headers())
+        response.raise_for_status()
+        return Response(content=response.content, media_type="application/octet-stream", headers={"Content-Disposition": f'attachment; filename="playbook-{document_id[:12]}.{rows[0]["format"]}"'})
+    except RuntimeError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except httpx.HTTPError as error:
+        raise HTTPException(status_code=502, detail="Unable to download the source document") from error
 
 
 @app.get("/api/v1/alerts")
@@ -555,7 +638,7 @@ async def decide_alert(alert_id: int, request: AlertDecisionRequest) -> dict:
                 settings,
                 alert["conditions"]["code"],
                 alert["alert_level"],
-                query_context=f"Approved alert {alert_id}",
+                query_context=json.dumps(alert.get("evidence_summary", {}))[:4000],
             )
             created_actions = await repository.create_actions(action_rows(alert_id, plan["actions"], decision_time))
             try:

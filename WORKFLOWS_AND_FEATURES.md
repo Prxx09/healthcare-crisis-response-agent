@@ -12,7 +12,7 @@ The workflow is orchestrated with Microsoft Agent Framework and exposed through 
 2. **Signal Agent** — calculates a 28-day baseline, percentage change and z-score for each source; assigns `monitor`, `investigate` or `escalate`; and checks multi-source corroboration.
 3. **Investigation Agent** — compares 14-day source activity, identifies peak activity and unusual daily values, and summarizes hospital bed occupancy, staffing coverage, and supply readiness.
 4. **Forecast Agent** — creates bounded best-case, expected and upper-stress visit scenarios. The default horizon is seven days. These are planning scenarios, not epidemiological predictions.
-5. **Response Agent** — selects condition- and alert-level actions from the approved versioned JSON playbook. Optional Pinecone retrieval adds supporting playbook context but cannot replace or create actions.
+5. **Response Agent** — retrieves disease- and alert-level actions from reviewed, active uploaded playbooks using Pinecone. Supabase supplies the source-verified action records. The bundled JSON playbook is the fallback.
 6. **AI Summary Agent** — prepares a grounded evidence briefing through Groq or Hugging Face when configured. Invalid or unavailable model output falls back to a deterministic briefing.
 7. **Incident Commander Gate** — requires review for corroborated `investigate` and `escalate` signals. No controlled action is issued automatically.
 
@@ -36,9 +36,9 @@ Investigation and forecasting execute concurrently after signal analysis. The wo
 
 ## Playbook and RAG Workflow
 
-- `playbooks/response_playbooks.json` is the authoritative source of executable actions.
-- JSON, YAML, PDF and DOCX files can be uploaded for validation only; upload does not activate a playbook.
-- When enabled, Pinecone indexes approved actions and guidance and filters retrieval by playbook version, condition and alert level.
+- Active uploaded playbooks provide source-backed actions stored in Supabase; `playbooks/response_playbooks.json` remains the fallback.
+- Upload JSON, YAML, searchable PDF or DOCX. Save the original privately, extract text, use an LLM where needed, verify quotations, and automatically index actions in Pinecone.
+- Review extracted actions, disease and severity labels, owner and timing before activation. Only active indexed uploads are searched, with disease and alert-level filters and incident context.
 - If Pinecone is disabled or unavailable, deterministic playbook selection continues normally.
 
 ## Implemented Interface Features
@@ -51,7 +51,7 @@ Investigation and forecasting execute concurrently after signal analysis. The wo
 - Action assignment and status tracking
 - Incident timeline and PDF report download
 - Email schedule, recipient and delivery-history management
-- Playbook file validation
+- Playbook upload, LLM-assisted extraction, indexing, source review, activation and deactivation
 - Loading indicators and temporary bottom notifications
 
 ## Boundaries

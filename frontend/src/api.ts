@@ -1,4 +1,4 @@
-import type { AlertRecord, Condition, EmailAlertConfig, EmailAlertDashboard, EvidenceBriefing, ForecastBriefing, ForecastResponse, IncidentAction, IncidentTimeline, InvestigationResponse, Observation, PlaybookLibrary, PlaybookValidation, Hospital, ResponsePlan, SignalResponse, WorkflowRun, PredictiveAgentState, AgentFollowup } from "./types";
+import type { AlertRecord, Condition, EmailAlertConfig, EmailAlertDashboard, EvidenceBriefing, ForecastBriefing, ForecastResponse, IncidentAction, IncidentTimeline, InvestigationResponse, Observation, PlaybookLibrary, PlaybookValidation, PlaybookDocument, Hospital, ResponsePlan, SignalResponse, WorkflowRun, PredictiveAgentState, AgentFollowup } from "./types";
 
 const API_URL = (import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000").replace(/\/$/, "");
 
@@ -50,8 +50,9 @@ export const api = {
     const query = new URLSearchParams({ analysis_date: analysisDate, hospital_code: hospital, condition_code: condition, window_days: "14" });
     return getJson<InvestigationResponse>(`/api/v1/investigation?${query}`);
   },
-  responsePlan: (condition: string, level: "monitor" | "investigate" | "escalate") => {
+  responsePlan: (condition: string, level: "monitor" | "investigate" | "escalate", context?: string) => {
     const query = new URLSearchParams({ condition_code: condition, alert_level: level });
+    if (context) query.set("query_context", context.slice(0, 4000));
     return getJson<ResponsePlan>(`/api/v1/response-plan?${query}`);
   },
   briefing: (analysisDate: string, hospital: string, condition: string) => {
@@ -69,6 +70,19 @@ export const api = {
     return getJson<WorkflowRun>(`/api/v1/workflow?${query}`);
   },
   playbooks: () => getJson<PlaybookLibrary>("/api/v1/playbooks"),
+  playbookSourceUrl: (id: string) => `${API_URL}/api/v1/playbooks/${id}/source`,
+  activatePlaybook: (id: string, active: boolean, reviewerName: string) =>
+    sendJson<PlaybookDocument>(`/api/v1/playbooks/${id}/activation`, "PATCH", {active, reviewer_name: reviewerName}),
+  uploadPlaybook: async (file: File) => {
+    const response = await fetch(`${API_URL}/api/v1/playbooks/upload?${new URLSearchParams({filename: file.name})}`, {
+      method: "POST", headers: {"Content-Type": "application/octet-stream"}, body: file,
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null);
+      throw new Error(payload?.detail ?? `Upload failed (${response.status})`);
+    }
+    return response.json() as Promise<PlaybookDocument>;
+  },
   validatePlaybook: async (file: File) => {
     const query = new URLSearchParams({ filename: file.name });
     const response = await fetch(`${API_URL}/api/v1/playbooks/validate?${query}`, {

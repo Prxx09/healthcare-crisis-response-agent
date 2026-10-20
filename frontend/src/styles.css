@@ -261,3 +261,14 @@ button:disabled { cursor: not-allowed; }
 .followup-complete { display: flex; flex-wrap: wrap; gap: 8px; }
 .followup-complete input { min-width: 220px; flex: 1; padding: 8px; border: 1px solid #b6c8da; border-radius: 6px; }
 .agent-boundary { padding: 10px 12px; border-left: 3px solid #d99c34; background: #fff9ed; }
+
+.playbook-review-toolbar { display:flex; align-items:end; justify-content:space-between; gap:16px; padding:20px; }
+.playbook-review-toolbar label { display:grid; gap:8px; }
+.uploaded-playbook { padding:24px; margin-top:16px; overflow-wrap:anywhere; }
+.uploaded-actions { display:grid; gap:12px; margin-top:20px; }
+.uploaded-actions .response-action { align-items:start; }
+.uploaded-actions .response-action > span { min-width:110px; }
+.uploaded-actions details { margin-top:10px; }
+.uploaded-actions blockquote { border-left:3px solid #3b82f6; margin:12px 0; padding-left:12px; }
+.playbook-notice { padding:16px; }
+@media(max-width:700px) { .playbook-review-toolbar { align-items:stretch; flex-direction:column; } .uploaded-actions .response-action { display:block; } }

@@ -1,10 +1,11 @@
+import { PlaybookLibraryPage } from "./PlaybookLibraryPage";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Activity, AlertTriangle, CheckCircle2, Clock3, Database, Download, FileCheck2, ListChecks, Mail, RefreshCw, ShieldCheck, Sparkles, Upload, Workflow as WorkflowIcon, X, XCircle } from "lucide-react";
+import { Activity, AlertTriangle, CheckCircle2, Clock3, Database, Download,  ListChecks, Mail, RefreshCw, ShieldCheck, Sparkles,  Workflow as WorkflowIcon, X, XCircle } from "lucide-react";
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api } from "./api";
 import { EmailAlertsPage } from "./EmailAlertsPage";
 import { NotificationBanner } from "./NotificationBanner";
-import type { AlertRecord, Cluster, Condition, EvidenceBriefing, ForecastBriefing, ForecastResponse, IncidentAction, IncidentTimeline, InvestigationResponse, Observation, PlaybookLibrary, PlaybookValidation, Hospital, ResponsePlan, SignalResponse, WorkflowRun, PredictiveAgentState } from "./types";
+import type { AlertRecord, Cluster, Condition, EvidenceBriefing, ForecastBriefing, ForecastResponse, IncidentAction, IncidentTimeline, InvestigationResponse, Observation,   Hospital, ResponsePlan, SignalResponse, WorkflowRun, PredictiveAgentState } from "./types";
 
 const SOURCE_LABELS: Record<string, string> = { visits: "Visits", lab_positives: "Lab positives", pharmacy_demand: "Pharmacy demand" };
 type View = "dashboard" | "alerts" | "actions" | "playbooks" | "emails";
@@ -76,10 +77,7 @@ export default function App() {
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
   const [alertLoading, setAlertLoading] = useState(false);
   const [pendingAlertDecision, setPendingAlertDecision] = useState<{ id: number; status: "approved" | "dismissed" } | null>(null);
-  const [playbookLibrary, setPlaybookLibrary] = useState<PlaybookLibrary | null>(null);
-  const [playbookValidation, setPlaybookValidation] = useState<PlaybookValidation | null>(null);
-  const [playbookMessage, setPlaybookMessage] = useState<string | null>(null);
-  const [playbookLoading, setPlaybookLoading] = useState(false);
+
   const [briefing, setBriefing] = useState<EvidenceBriefing | null>(null);
   const [briefingLoading, setBriefingLoading] = useState(false);
   const [briefingOpen, setBriefingOpen] = useState(false);
@@ -215,10 +213,7 @@ export default function App() {
       .finally(() => setAlertLoading(false));
   }, [view, refreshKey]);
 
-  useEffect(() => {
-    if (view !== "playbooks") return;
-    api.playbooks().then(setPlaybookLibrary).catch(() => setPlaybookMessage("The playbook service is unavailable."));
-  }, [view]);
+
 
   useEffect(() => {
     if (view !== "actions") return;
@@ -227,19 +222,6 @@ export default function App() {
     api.actions().then(setActions).catch((reason: Error) => setActionMessage(reason.message)).finally(() => setActionLoading(false));
   }, [view, refreshKey]);
 
-  async function validatePlaybook(file: File | undefined) {
-    if (!file) return;
-    setPlaybookLoading(true);
-    setPlaybookMessage(null);
-    setPlaybookValidation(null);
-    try {
-      const result = await api.validatePlaybook(file);
-      setPlaybookValidation(result);
-      setPlaybookMessage("Playbook structure is valid. Validation does not replace the active playbook.");
-    } catch (reason) {
-      setPlaybookMessage(reason instanceof Error ? reason.message : "Unable to validate the playbook.");
-    } finally { setPlaybookLoading(false); }
-  }
 
   async function generateCaseBriefing(targetHospital: string, targetCondition: string) {
     const requestId = ++briefingRequestRef.current;
@@ -428,12 +410,16 @@ export default function App() {
     return { scenarios, expectedEnd, bestEnd, worstEnd, expectedChange };
   }, [forecast]);
 
+  const responseContext = JSON.stringify({date: analysisDate, hospital, clusters: selectedClusters, readiness: investigation?.hospital_context, outlook: forecastSummary?.expectedEnd}).slice(0, 4000);
   useEffect(() => {
+    if (view !== "dashboard") return;
     if (!hasSpecificScope || activeLevel === "normal") { setResponsePlan(null); return; }
-    api.responsePlan(condition, activeLevel)
-      .then(setResponsePlan)
-      .catch(() => setResponsePlan(null));
-  }, [activeLevel, condition, hasSpecificScope]);
+    let cancelled = false;
+    api.responsePlan(condition, activeLevel, responseContext)
+      .then((result) => { if (!cancelled) setResponsePlan(result); })
+      .catch(() => { if (!cancelled) setResponsePlan(null); });
+    return () => { cancelled = true; };
+  }, [activeLevel, condition, hasSpecificScope, responseContext, view]);
 
   return (
     <div className="app-shell">
@@ -443,17 +429,12 @@ export default function App() {
       </aside>
 
       <main>
-        <header><div><p className="eyebrow">Healthcare Crisis Prediction and Response Agent</p><h1>{view === "dashboard" ? "Surveillance command dashboard" : view === "alerts" ? "Incident Commander alert review" : view === "actions" ? "Incident action tracker" : view === "emails" ? "Threshold email alerts" : "Response playbook library"}</h1><p className="subtitle">{view === "dashboard" ? "Review signals, supporting evidence and escalation readiness." : view === "alerts" ? "Approve or dismiss corroborated alerts before any response action is issued." : view === "actions" ? "Assign and track approved response tasks through completion." : view === "emails" ? "Configure scheduled delivery, recipients and manual threshold notifications." : "Validate operational guidance before it is considered for controlled activation."}</p></div><div className="system-status" role="status"><span aria-hidden="true"></span> Data pipeline active</div></header>
+        <header><div><p className="eyebrow">Healthcare Crisis Prediction and Response Agent</p><h1>{view === "dashboard" ? "Surveillance command dashboard" : view === "alerts" ? "Incident Commander alert review" : view === "actions" ? "Incident action tracker" : view === "emails" ? "Threshold email alerts" : "Response playbook library"}</h1><p className="subtitle">{view === "dashboard" ? "Review signals, supporting evidence and escalation readiness." : view === "alerts" ? "Approve or dismiss corroborated alerts before any response action is issued." : view === "actions" ? "Assign and track approved response tasks through completion." : view === "emails" ? "Configure scheduled delivery, recipients and manual threshold notifications." : "Upload, index, review and activate source-backed response guidance."}</p></div><div className="system-status" role="status"><span aria-hidden="true"></span> Data pipeline active</div></header>
 
         {view === "emails" && <EmailAlertsPage analysisDate={analysisDate} />}
         {view === "actions" && timeline && <div className="timeline-dismiss-row"><button className="timeline-close" onClick={() => setTimeline(null)}><X size={16} /> Close timeline</button></div>}
 
-        {view === "actions" ? <section className="action-page"><div className="card action-toolbar"><label>Assign updates as<input value={actionAssignee} onChange={(event) => setActionAssignee(event.target.value)} placeholder="Team member or role" /></label><button onClick={() => setRefreshKey((value) => value + 1)} disabled={actionLoading}><RefreshCw size={16} /> Refresh actions</button></div><NotificationBanner message={actionMessage} onDismiss={() => setActionMessage(null)} />{timeline && <div className="card timeline-panel"><div className="panel-heading"><div><h2>Incident timeline · Alert #{timeline.alert_id}</h2><p>Chronological alert decision and action history</p></div><button className="report-link" onClick={() => downloadSituationReport(timeline.alert_id)}><Download size={14} /> Download PDF</button></div><div className="timeline-list">{timeline.events.map((event) => <div key={`${event.timestamp}-${event.event}`}><span><Clock3 size={12} /></span><div><strong>{event.title}</strong><p>{event.detail}</p><small>{new Date(event.timestamp).toLocaleString()}</small></div></div>)}</div></div>}<div className="review-heading"><div><h2>Approved response actions</h2><p>Tasks are created only after Incident Commander approval.</p></div><span>{actions.filter((item) => item.status !== "completed" && item.status !== "cancelled").length} open</span></div>{actionLoading && actions.length === 0 ? <div className="card review-empty">Loading action tracker…</div> : actions.length === 0 ? <div className="card review-empty"><ListChecks size={36} /><strong>No response actions</strong><p>Approved alerts will create tasks from the selected playbook.</p></div> : <div className="action-tracker-list">{actions.map((item) => <article className="card tracked-action" key={item.id}><div className="tracked-heading"><span className={`task-status ${item.status}`}>{item.status.replaceAll("_", " ")}</span><div><strong>{item.action_text}</strong><p>{item.alerts.conditions.name} · {item.alerts.hospitals.name} · Alert #{item.alert_id}</p></div></div><div className="task-meta"><span><small>Owner</small>{item.owner_role}</span><span><small>Assignee</small>{item.assignee_name || "Unassigned"}</span><span><small>Timeframe</small>{item.timeframe}</span><span><small>Due</small>{item.due_at ? new Date(item.due_at).toLocaleString() : "Ongoing"}</span></div><div className="alert-actions"><button className="timeline-button" onClick={() => loadTimeline(item.alert_id)} disabled={actionLoading}><Clock3 size={14} /> Timeline</button><button className="report-link compact" onClick={() => downloadSituationReport(item.alert_id)}><Download size={14} /> PDF report</button>{item.status === "pending" && <button className="generate-button" onClick={() => updateAction(item.id, "in_progress")} disabled={actionLoading}>Start action</button>}{item.status === "in_progress" && <button className="approve-button" onClick={() => updateAction(item.id, "completed")} disabled={actionLoading}><CheckCircle2 size={16} /> Complete</button>}{item.status !== "completed" && item.status !== "cancelled" && <button className="dismiss" onClick={() => updateAction(item.id, "cancelled")} disabled={actionLoading}>Cancel</button>}</div></article>)}</div>}</section> : view === "playbooks" ? <section className="playbook-page">
-          <div className="card playbook-overview"><div><span>Active playbook</span><strong>Version {playbookLibrary?.active_version ?? "—"}</strong><p>Current bounded response actions used by the recommendation engine.</p></div><div><span>Supported files</span><strong>{playbookLibrary?.supported_formats.map((item) => item.toUpperCase()).join(" · ") ?? "PDF · DOCX · YAML · JSON"}</strong><p>Maximum file size {playbookLibrary ? `${Math.round(playbookLibrary.max_file_bytes / 1024 / 1024)} MB` : "5 MB"}.</p></div></div>
-          <div className="card upload-panel"><Upload size={30} aria-hidden="true" /><div><h2>Validate a playbook</h2><p>The file is parsed and checked against the required response schema. It is not activated or stored.</p></div><label className="upload-button" tabIndex={0} role="button" onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.currentTarget.querySelector<HTMLInputElement>("input")?.click(); } }}>{playbookLoading ? "Validating…" : "Choose file"}<input type="file" accept=".pdf,.docx,.yaml,.yml,.json" disabled={playbookLoading} onChange={(event) => validatePlaybook(event.target.files?.[0])} /></label></div>
-          <NotificationBanner message={playbookMessage} onDismiss={() => setPlaybookMessage(null)} />
-          {playbookValidation && <div className="card validation-result"><div className="validation-title"><FileCheck2 size={26} /><div><strong>{playbookValidation.source.filename}</strong><span>{playbookValidation.source.format.toUpperCase()} · {playbookValidation.source.size_bytes.toLocaleString()} bytes · Version {playbookValidation.summary.version}</span></div></div><div className="validation-metrics"><div><span>Conditions</span><strong>{playbookValidation.summary.conditions.length}</strong><small>{playbookValidation.summary.conditions.join(", ").toUpperCase()}</small></div>{Object.entries(playbookValidation.summary.action_counts).map(([level, count]) => <div key={level}><span>{level}</span><strong>{count}</strong><small>validated actions</small></div>)}</div><p className="hash">SHA-256: {playbookValidation.source.sha256}</p></div>}
-        </section> : view === "alerts" ? <section className="review-page">
+        {view === "actions" ? <section className="action-page"><div className="card action-toolbar"><label>Assign updates as<input value={actionAssignee} onChange={(event) => setActionAssignee(event.target.value)} placeholder="Team member or role" /></label><button onClick={() => setRefreshKey((value) => value + 1)} disabled={actionLoading}><RefreshCw size={16} /> Refresh actions</button></div><NotificationBanner message={actionMessage} onDismiss={() => setActionMessage(null)} />{timeline && <div className="card timeline-panel"><div className="panel-heading"><div><h2>Incident timeline · Alert #{timeline.alert_id}</h2><p>Chronological alert decision and action history</p></div><button className="report-link" onClick={() => downloadSituationReport(timeline.alert_id)}><Download size={14} /> Download PDF</button></div><div className="timeline-list">{timeline.events.map((event) => <div key={`${event.timestamp}-${event.event}`}><span><Clock3 size={12} /></span><div><strong>{event.title}</strong><p>{event.detail}</p><small>{new Date(event.timestamp).toLocaleString()}</small></div></div>)}</div></div>}<div className="review-heading"><div><h2>Approved response actions</h2><p>Tasks are created only after Incident Commander approval.</p></div><span>{actions.filter((item) => item.status !== "completed" && item.status !== "cancelled").length} open</span></div>{actionLoading && actions.length === 0 ? <div className="card review-empty">Loading action tracker…</div> : actions.length === 0 ? <div className="card review-empty"><ListChecks size={36} /><strong>No response actions</strong><p>Approved alerts will create tasks from the selected playbook.</p></div> : <div className="action-tracker-list">{actions.map((item) => <article className="card tracked-action" key={item.id}><div className="tracked-heading"><span className={`task-status ${item.status}`}>{item.status.replaceAll("_", " ")}</span><div><strong>{item.action_text}</strong><p>{item.alerts.conditions.name} · {item.alerts.hospitals.name} · Alert #{item.alert_id}</p></div></div><div className="task-meta"><span><small>Owner</small>{item.owner_role}</span><span><small>Assignee</small>{item.assignee_name || "Unassigned"}</span><span><small>Timeframe</small>{item.timeframe}</span><span><small>Due</small>{item.due_at ? new Date(item.due_at).toLocaleString() : "Ongoing"}</span></div><div className="alert-actions"><button className="timeline-button" onClick={() => loadTimeline(item.alert_id)} disabled={actionLoading}><Clock3 size={14} /> Timeline</button><button className="report-link compact" onClick={() => downloadSituationReport(item.alert_id)}><Download size={14} /> PDF report</button>{item.status === "pending" && <button className="generate-button" onClick={() => updateAction(item.id, "in_progress")} disabled={actionLoading}>Start action</button>}{item.status === "in_progress" && <button className="approve-button" onClick={() => updateAction(item.id, "completed")} disabled={actionLoading}><CheckCircle2 size={16} /> Complete</button>}{item.status !== "completed" && item.status !== "cancelled" && <button className="dismiss" onClick={() => updateAction(item.id, "cancelled")} disabled={actionLoading}>Cancel</button>}</div></article>)}</div>}</section> : view === "playbooks" ? <PlaybookLibraryPage /> : view === "alerts" ? <section className="review-page">
           <div className="card review-toolbar"><label>Incident Commander<input value={reviewer} onChange={(event) => setReviewer(event.target.value)} placeholder="Enter reviewer name" /></label><button onClick={() => setRefreshKey((value) => value + 1)} disabled={alertLoading}><RefreshCw size={16} /> Refresh queue</button></div>
           <NotificationBanner message={alertMessage} onDismiss={() => setAlertMessage(null)} />
           <div className="review-heading"><div><h2>Pending approval</h2><p>Monitor alerts always require human review; Investigate and Escalate remain here unless agent pre-approval policy passes.</p></div><span>{alerts.length} pending</span></div>
@@ -565,7 +546,7 @@ export default function App() {
          {hasSpecificScope && <section className="card investigation-panel"><div className="panel-heading"><div><h2>Cluster investigation</h2><p>Fourteen-day evidence correlation for the selected scope</p></div>{investigation && <span className="forecast-change">Peak {formatDate(investigation.peak_date)}</span>}</div>
           <div className="investigation-grid"><div><strong>Source comparison</strong><div className="source-cards">{investigation?.source_comparison.map((item) => <div key={item.signal_source}><span>{SOURCE_LABELS[item.signal_source] ?? item.signal_source}</span><strong>{item.recent_median}</strong><small>{item.comparison_period_days}-day recent median</small><small>{item.window_change_pct === null ? "New activity from zero baseline" : `${item.window_change_pct > 0 ? "+" : ""}${item.window_change_pct}% vs early median`}</small><small>Latest {item.latest_count} · Peak {item.peak_count}</small>{item.outlier_count > 0 && <small className="outlier-note">{item.outlier_count} unusual day{item.outlier_count === 1 ? "" : "s"} detected</small>}</div>)}</div></div><div><strong>Hospital operations</strong><dl className="context-list"><div><dt>Average bed occupancy</dt><dd>{investigation?.hospital_context.average_bed_occupancy_pct ?? "—"}%</dd></div><div><dt>Staffing coverage</dt><dd>{investigation?.hospital_context.average_staffing_coverage_pct ?? "—"}%</dd></div><div><dt>Supply readiness</dt><dd>{investigation?.hospital_context.average_supply_readiness_pct ?? "—"}%</dd></div></dl></div><div><strong>Investigation findings</strong><ul className="finding-list">{investigation?.findings.map((item) => <li key={item}>{item}</li>)}</ul></div></div>
         </section>}
-        {responsePlan && <section className="card response-panel"><div className="panel-heading"><div><h2>Recommended response playbook</h2><p>Version {responsePlan.playbook_version} · Actions remain behind the human approval gate</p></div><span className={`level ${responsePlan.alert_level}`}>{levelLabel(responsePlan.alert_level)}</span></div><div className="response-grid"><div className="action-list">{responsePlan.actions.map((item) => <div className="response-action" key={`${item.category}-${item.action}`}><span>{item.category}</span><div><strong>{item.action}</strong><p>{item.owner} · {item.timeframe}</p></div>{item.requires_approval && <small>Approval required</small>}</div>)}</div><aside><strong>Condition guidance</strong>{responsePlan.condition_guidance.map((item) => <p key={item}>{item}</p>)}<div className="boundary-note">{responsePlan.boundary}</div></aside></div></section>}
+        {responsePlan && <section className="card response-panel"><div className="panel-heading"><div><h2>Recommended response playbook</h2><p>Version {responsePlan.playbook_version} · Actions remain behind the human approval gate</p></div><span className={`level ${responsePlan.alert_level}`}>{levelLabel(responsePlan.alert_level)}</span></div><div className="response-grid"><div className="action-list">{responsePlan.actions.map((item) => <div className="response-action" key={`${item.category}-${item.action}`}><span>{item.category}</span><div><strong>{item.action}</strong><p>{item.owner} · {item.timeframe}</p>{item.source_filename && <small>Source: {item.source_filename}</small>}</div>{item.requires_approval && <small>Approval required</small>}</div>)}</div><aside><strong>Condition guidance</strong>{responsePlan.condition_guidance.map((item) => <p key={item}>{item}</p>)}<div className="boundary-note">{responsePlan.boundary}</div></aside></div></section>}
         {briefing && <section className="card briefing-panel"><div className="briefing-header"><Sparkles size={23} /><div><span>AI interpretation · {briefing.provider}{briefing.model ? ` · ${briefing.model}` : ""}</span><h2>{briefing.headline}</h2></div></div><p className="briefing-situation">{briefing.situation}</p><div className="briefing-columns"><div><strong>Supporting evidence</strong><ul>{briefing.evidence.map((item) => <li key={item}>{item}</li>)}</ul></div><div><strong>Uncertainties</strong><ul>{briefing.uncertainties.map((item) => <li key={item}>{item}</li>)}</ul></div></div><div className="review-callout"><strong>Recommended review</strong><p>{briefing.recommended_review}</p></div>{briefing.fallback_reason && <p className="fallback-note">Fallback used: {briefing.fallback_reason}</p>}<small>{briefing.disclaimer}</small></section>}
         </> : null}
 
