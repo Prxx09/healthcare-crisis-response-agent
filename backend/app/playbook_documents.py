@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -39,9 +40,57 @@ def _structured_section(text: str) -> str:
     raise ValueError(f"PDF and DOCX playbooks must contain a structured section between {START_MARKER} and {END_MARKER}")
 
 
+def _section_playbook(payload: dict[str, Any]) -> dict[str, Any]:
+    """Normalize explicit section-based instructions without requiring an LLM."""
+    version = payload.get("document_version")
+    if isinstance(version, bool) or not isinstance(version, (str, int, float)) or not str(version).strip():
+        raise ValueError("Section-based playbooks require document_version")
+    condition = payload.get("condition_code")
+    if condition is None:
+        aliases = {"dengue": "dengue", "ili": "ili", "influenza-like illness": "ili", "age": "age", "acute gastroenteritis": "age"}
+        disease = payload.get("disease")
+        condition = aliases.get(disease.strip().lower()) if isinstance(disease, str) else None
+    if not isinstance(condition, str) or condition not in {"ili", "age", "dengue"}:
+        raise ValueError("Section-based playbooks require condition_code: ili, age or dengue")
+    sections = payload.get("sections")
+    if not isinstance(sections, list) or not sections:
+        raise ValueError("Playbook sections must be a non-empty list")
+    levels: dict[str, list[dict[str, Any]]] = {"monitor": [], "investigate": [], "escalate": []}
+    for number, section in enumerate(sections, 1):
+        if not isinstance(section, dict):
+            raise ValueError(f"Section {number} must be an object")
+        heading = section.get("heading", "")
+        match = re.match(r"^(monitor|investigate|escalate)(?=\s|[—–:|-]|$)", heading.strip(), re.I) if isinstance(heading, str) else None
+        level = section.get("alert_level") or (match.group(1).lower() if match else None)
+        if not isinstance(level, str) or level not in levels:
+            raise ValueError(f"Section {number} must declare monitor, investigate or escalate in its heading or alert_level")
+        instructions = section.get("instructions")
+        if not isinstance(instructions, list) or not instructions:
+            raise ValueError(f"Section {number} instructions must be a non-empty list")
+        for instruction in instructions:
+            if not isinstance(instruction, str) or not instruction.strip():
+                raise ValueError(f"Section {number} instructions must be non-empty strings")
+            # Preserve complete instructions verbatim. Only copy roles/timing explicitly present.
+            owner_match = re.search(r"\b([A-Z][A-Za-z ]{0,60}?(?:lead|Commander))\s+must\b", instruction)
+            timeframe_match = re.search(r"\bwithin\s+\d+\s+(?:hours?|days?|minutes?)\b", instruction, re.I)
+            owner = owner_match.group(1) if owner_match else None
+            timeframe = timeframe_match.group(0) if timeframe_match else None
+            levels[level].append({"action": instruction.strip(), "category": "monitoring" if level == "monitor" else "investigation" if level == "investigate" else "coordination",
+                "owner": owner or "Incident Commander", "timeframe": timeframe or "After review", "requires_approval": True,
+                "source_section": number, "review_notes": [message for value, message in (
+                    (owner, "Owner not specified; confirm assignment"), (timeframe, "Timeframe not specified; confirm timing")) if not value]})
+    if any(not actions for actions in levels.values()):
+        raise ValueError("Section-based playbooks require instructions for monitor, investigate and escalate")
+    guidance = payload.get("purpose") or payload.get("title") or "Review the original playbook before activating its actions."
+    return {"version": str(version), "levels": levels, "condition_actions": {condition: levels},
+            "condition_guidance": {condition: [guidance] if isinstance(guidance, str) else []}}
+
+
 def _validate_playbook(payload: Any) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError("Playbook content must be an object")
+    if "sections" in payload:
+        payload = _section_playbook(payload)
     if not isinstance(payload.get("version"), (str, int, float)):
         raise ValueError("Playbook version is required")
     levels = payload.get("levels")

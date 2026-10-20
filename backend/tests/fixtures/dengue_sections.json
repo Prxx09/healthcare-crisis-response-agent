@@ -1,0 +1,46 @@
+{
+  "title": "Dengue Hospital Response Playbook — Synthetic Upload Test",
+  "document_version": "1.0",
+  "disease": "Dengue",
+  "condition_code": "dengue",
+  "purpose": "Synthetic operational guidance for testing document extraction, action indexing and recommendations in the Healthcare Crisis Prediction and Response Agent. This is not a clinical treatment protocol.",
+  "scope": "Hospital surveillance, laboratory reporting, staffing, beds, supplies and internal coordination. No patient treatment, purchasing or external communication is authorized by this document.",
+  "sections": [
+    {
+      "heading": "Monitor — routine Dengue surveillance",
+      "instructions": [
+        "For routine Dengue monitoring, the Surveillance lead must compare the latest seven reported days of Dengue visits with the previous seven reported days within 24 hours, recording missing reports separately from zero visits.",
+        "For routine Dengue monitoring, the Laboratory lead must check the number of Dengue-positive results and pending Dengue tests within 24 hours, keeping confirmed positives separate from suspected visits.",
+        "For routine Dengue monitoring, the Operations lead must record available staffed beds, staff coverage and supply readiness within 24 hours."
+      ]
+    },
+    {
+      "heading": "Investigate — unexpected increase in Dengue visits",
+      "instructions": [
+        "When an unexpected increase in Dengue visits requires investigation, the Surveillance lead must verify the visit totals and reporting completeness within 4 hours before interpreting the increase.",
+        "When investigating an unexpected increase in Dengue visits, the Laboratory lead must check pending Dengue tests and delayed result reporting within 4 hours; if visits rise while positive results remain flat, record the conflicting evidence and the need for further verification.",
+        "When investigating an unexpected increase in Dengue visits, the Operations lead must compare the seven-day visit scenarios with current staffed beds and staff coverage within 8 hours, and report any readiness gaps to the Incident Commander."
+      ]
+    },
+    {
+      "heading": "Escalate — Dengue demand with verified operational pressure",
+      "instructions": [
+        "When Dengue demand requires escalation because verified operational pressure is present, the Incident Commander must review the visit trend, laboratory evidence, reporting limitations and readiness gaps within 2 hours before approving response tasks.",
+        "During an escalated Dengue response, the Operations lead must prepare a proposed bed and staffing readiness plan within 4 hours; resource transfers and additional staffing commitments require authorized approval before implementation.",
+        "During an escalated Dengue response, the Communications lead must prepare an internal situation update within 4 hours that separates confirmed findings, suspected cases, reporting gaps and pending checks; sending the update requires Incident Commander approval."
+      ]
+    }
+  ],
+  "review_expectations": {
+    "conditions": [
+      "dengue"
+    ],
+    "alert_levels": [
+      "monitor",
+      "investigate",
+      "escalate"
+    ],
+    "expected_distinct_actions": 9,
+    "activation": "Review source quotations, disease labels, alert levels, owners and timeframes before activating. No real notifications or resource changes should be performed for this synthetic test."
+  }
+}

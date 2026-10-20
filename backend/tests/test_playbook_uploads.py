@@ -26,6 +26,59 @@ class UploadTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual({a['condition_code'] for a in actions}, {'ili', 'age', 'dengue'})
         self.assertTrue(all(a['requires_approval'] for a in actions))
 
+    async def test_exact_dengue_section_file_has_nine_actions_without_ai(self):
+        from app.playbook_documents import parse_playbook_document
+        data = (Path(__file__).parent / 'fixtures/dengue_sections.json').read_bytes()
+        validation = parse_playbook_document('dengue.json', data)
+        self.assertEqual(validation['summary']['version'],'1.0')
+        self.assertEqual(validation['summary']['action_counts'],{'monitor':3,'investigate':3,'escalate':3})
+        with patch('app.playbook_uploads.structure_section',new=AsyncMock(side_effect=AssertionError('AI must not be called'))):
+            actions, method = await extract_actions('dengue.json',data,data.decode(),settings())
+        self.assertEqual(method,'structured'); self.assertEqual(len(actions),9)
+        self.assertEqual({a['condition_code'] for a in actions},{'dengue'})
+        self.assertEqual({a['section'] for a in actions},{1,2,3})
+        monitor = next(a for a in actions if a['action'].startswith('For routine Dengue monitoring, the Surveillance'))
+        self.assertEqual(monitor['owner'],'Surveillance lead')
+        self.assertEqual(monitor['timeframe'],'within 24 hours')
+        self.assertEqual(monitor['review_notes'],[])
+
+    async def test_invalid_recognized_section_format_never_falls_back_to_ai(self):
+        data=json.dumps({'document_version':'1','condition_code':'dengue','sections':[{'heading':'Unknown level','instructions':['Review dengue counts.']}]}).encode()
+        with patch('app.playbook_uploads.structure_section',new=AsyncMock()) as model:
+            with self.assertRaisesRegex(ValueError,'Section 1 must declare'):
+                await extract_actions('guide.json',data,data.decode(),settings())
+        model.assert_not_called()
+
+    async def test_missing_schema_version_keeps_validation_error(self):
+        data=json.dumps({'levels':{}}).encode()
+        with self.assertRaisesRegex(ValueError,'Playbook version is required'):
+            await extract_actions('guide.json',data,data.decode(),settings())
+
+    async def test_index_failure_preserves_extraction_and_stage(self):
+        data=(Path(__file__).parent / 'fixtures/dengue_sections.json').read_bytes()
+        repo=MagicMock(); repo.privileged_get=AsyncMock(return_value=[])
+        repo.post=AsyncMock(return_value=[{'id':'abc'}]);repo.patch=AsyncMock(return_value=[])
+        with patch('app.playbook_uploads.upload_source',new=AsyncMock()), patch('app.playbook_uploads.index_actions',side_effect=RuntimeError('Index dimension mismatch')):
+            with self.assertRaisesRegex(RuntimeError,'Pinecone indexing failed: Index dimension mismatch'):
+                await ingest(repo,settings(),'dengue.json',data)
+        updates=[call.args[2] for call in repo.patch.call_args_list]
+        self.assertEqual(updates[0]['extraction_method'],'structured')
+        self.assertEqual(len(updates[0]['actions']),9)
+        self.assertEqual(updates[-1]['status'],'failed')
+        self.assertIn('Pinecone indexing',updates[-1]['error_message'])
+
+    async def test_http_error_identifies_storage_stage_without_leaking_headers(self):
+        import httpx
+        request=httpx.Request('POST','https://example.invalid',headers={'Authorization':'secret'})
+        error=httpx.HTTPStatusError('sensitive detail',request=request,response=httpx.Response(403,request=request))
+        repo=MagicMock();repo.privileged_get=AsyncMock(return_value=[])
+        repo.post=AsyncMock(return_value=[{'id':'abc'}]);repo.patch=AsyncMock(return_value=[])
+        with patch('app.playbook_uploads.upload_source',new=AsyncMock(side_effect=error)):
+            with self.assertRaisesRegex(RuntimeError,'Source storage failed: Upstream service returned HTTP 403') as result:
+                await ingest(repo,settings(),'guide.json',b'{"guidance":"Dengue operational guidance"}')
+        self.assertNotIn('secret',str(result.exception))
+        self.assertNotIn('sensitive',str(result.exception))
+
     def test_docx_tables_and_paragraphs(self):
         doc = Document(); doc.add_paragraph('Dengue investigation response playbook')
         doc.add_table(rows=1, cols=1).cell(0, 0).text = 'Review pending dengue laboratory results.'
@@ -37,7 +90,7 @@ class UploadTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(ValueError): extract_text(filename, data)
 
     async def test_unstructured_needs_ai(self):
-        data = b'Dengue: Review pending tests for the affected hospital.'
+        data = json.dumps({'guidance':'Dengue: Review pending tests for the affected hospital.'}).encode()
         with self.assertRaises(RuntimeError):
             await extract_actions('guide.json', data, data.decode(), settings())
 
@@ -69,7 +122,7 @@ class UploadTests(unittest.IsolatedAsyncioTestCase):
         repo = MagicMock(); repo.privileged_get = AsyncMock(return_value=[])
         repo.post = AsyncMock(return_value=[{'id':'abc'}]); repo.patch = AsyncMock(return_value=[])
         with patch('app.playbook_uploads.upload_source', new=AsyncMock()), patch('app.playbook_uploads.extract_actions', new=AsyncMock(side_effect=ValueError('No supported action'))):
-            with self.assertRaises(RuntimeError):
+            with self.assertRaisesRegex(ValueError, 'Parsing and action extraction failed: No supported action'):
                 await ingest(repo, settings(), 'guide.json', b'Dengue operational response action instructions.')
         self.assertEqual(repo.patch.call_args.args[2]['status'], 'failed')
         self.assertFalse(repo.post.call_args.args[1]['active'])

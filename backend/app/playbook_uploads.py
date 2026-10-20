@@ -7,6 +7,7 @@ import io
 import json
 import logging
 import zipfile
+import yaml
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -58,10 +59,21 @@ def sections(text: str) -> list[str]:
 
 
 def structured_actions(filename: str, data: bytes) -> list[dict] | None:
-    try:
+    extension = Path(filename).suffix.lower()
+    if extension in {".json", ".yaml", ".yml"}:
+        try:
+            raw = json.loads(data.decode("utf-8")) if extension == ".json" else yaml.safe_load(data.decode("utf-8"))
+        except (UnicodeError, json.JSONDecodeError, yaml.YAMLError) as error:
+            raise ValueError(f"Invalid {extension.lstrip('.').upper()} document: {error}") from error
+        if not isinstance(raw, dict) or not ({"sections", "levels", "condition_guidance", "condition_actions"} & raw.keys()):
+            return None
+        # A recognized schema must fail explicitly rather than silently invoking AI.
         payload = parse_playbook_document(filename, data)["playbook"]
-    except ValueError:
-        return None
+    else:
+        try:
+            payload = parse_playbook_document(filename, data)["playbook"]
+        except ValueError:
+            return None
     actions = []
     for condition in payload["condition_guidance"]:
         if condition not in CONDITIONS:
@@ -71,7 +83,7 @@ def structured_actions(filename: str, data: bytes) -> list[dict] | None:
                 if any(not isinstance(item.get(key), str) or not item[key].strip() for key in ("action", "category", "owner", "timeframe")):
                     raise ValueError("Playbook action fields must be non-empty text")
                 actions.append({**item, "condition_code": condition, "alert_level": level,
-                                "evidence_quote": item["action"], "section": 1, "requires_approval": True})
+                                "evidence_quote": item["action"], "section": item.get("source_section", 1), "requires_approval": True})
     return actions
 
 
@@ -183,25 +195,51 @@ async def ingest(repository: SupabaseRepository, settings: Settings, filename: s
                "size_bytes": len(data), "storage_path": f"{digest}{Path(filename).suffix.lower()}",
                "status": "processing", "active": False, "extracted_text": text,
                "index_namespace": f"{settings.pinecone_namespace}-upload-{digest}",
-               "updated_at": now.isoformat(), "error_message": None}
+               "updated_at": now.isoformat(), "error_message": None,
+               "actions": [], "vector_count": 0, "extraction_method": None}
     if existing:
         claimed = await repository.patch(TABLE, {"id": f"eq.{digest}", "updated_at": f"eq.{existing[0]['updated_at']}"}, payload)
     else:
         claimed = await repository.post(TABLE, payload)
     if not claimed:
         raise ValueError("This document is being processed by another upload; refresh the library")
+    stage = "Source storage"
     try:
         await upload_source(repository, settings, payload["storage_path"], data)
+        stage = "Parsing and action extraction"
         actions, method = await extract_actions(filename, data, text, settings)
         payload.update(actions=actions, extraction_method=method)
+        # Persist successful extraction even when indexing later fails.
+        stage = "Saving extracted actions"
+        await repository.patch(TABLE, {"id": f"eq.{digest}"}, {"actions": actions, "extraction_method": method,
+            "updated_at": datetime.now(timezone.utc).isoformat()})
+        stage = "Pinecone indexing"
         count = await asyncio.to_thread(index_actions, settings, payload)
+        stage = "Saving indexing result"
         saved = await repository.patch(TABLE, {"id": f"eq.{digest}"}, {"actions": actions, "extraction_method": method,
             "status": "indexed", "vector_count": count, "updated_at": datetime.now(timezone.utc).isoformat()})
         return saved[0]
     except Exception as error:
         logger.exception("Playbook ingestion failed for %s", digest)
-        message = str(error) if isinstance(error, (ValueError, RuntimeError)) else "Document processing or indexing failed. Check provider configuration and retry the same file."
-        await repository.patch(TABLE, {"id": f"eq.{digest}"}, {"status": "failed", "error_message": message[:500], "updated_at": datetime.now(timezone.utc).isoformat()})
+        if isinstance(error, httpx.HTTPStatusError):
+            detail = f"Upstream service returned HTTP {error.response.status_code}."
+        elif isinstance(error, httpx.TimeoutException):
+            detail = "The service request timed out. Retry the same file."
+        elif isinstance(error, httpx.RequestError):
+            detail = "The service could not be reached. Retry the same file."
+        elif isinstance(error, (ValueError, RuntimeError)):
+            detail = str(error)
+        else:
+            # SDK exceptions can contain request headers or keys; show type, log details server-side.
+            status = getattr(error, "status", None)
+            detail = f"{type(error).__name__}" + (f" (HTTP {status})" if isinstance(status, int) else "") + ". See backend logs for details."
+        message = f"{stage} failed: {detail}"
+        try:
+            await repository.patch(TABLE, {"id": f"eq.{digest}"}, {"status": "failed", "error_message": message[:500], "updated_at": datetime.now(timezone.utc).isoformat()})
+        except Exception:
+            logger.exception("Unable to persist failed status for playbook %s", digest)
+        if isinstance(error, ValueError):
+            raise ValueError(message) from error
         raise RuntimeError(message) from error
 
 
