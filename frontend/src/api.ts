@@ -87,7 +87,7 @@ export const api = {
   incidentTimeline: (alertId: number) => getJson<IncidentTimeline>(`/api/v1/incidents/${alertId}/timeline`),
   situationReportUrl: (alertId: number) => `${API_URL}/api/v1/incidents/${alertId}/report.pdf`,
   generateAlerts: (analysisDate: string, hospitalCode: string, conditionCode: string) =>
-    sendJson<{ analysis_date: string; eligible_clusters: number; created: number; existing: number; incident_master_notifications: { sent: number; failed: number; skipped: number } }>("/api/v1/alerts/generate", "POST", {
+    sendJson<{ analysis_date: string; eligible_clusters: number; created: number; existing: number; pending_human_review: number; auto_approved: number; actions_created: number; incident_master_notifications: { sent: number; failed: number; skipped: number }; owner_notifications: { sent: number; failed: number; skipped: number } }>("/api/v1/alerts/generate", "POST", {
       analysis_date: analysisDate,
       baseline_days: 28,
       hospital_code: hospitalCode,

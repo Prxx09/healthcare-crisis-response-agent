@@ -17,7 +17,7 @@ from .email_alerts import EmailAlertScheduler, next_scheduled_at, normalize_emai
 from .forecast_engine import build_scenarios
 from .investigation_engine import investigate_cluster
 from .models import ActionUpdateRequest, AlertDecisionRequest, AlertGenerationRequest, EmailAlertConfigRequest, EmailAlertSendRequest, PredictiveAssessmentRequest, FollowupCompletionRequest
-from .predictive_agent import run_predictive_agent
+from .predictive_agent import AGENT_REVIEWER_NAME, run_predictive_agent
 from .playbook_documents import MAX_FILE_BYTES, SUPPORTED_EXTENSIONS, parse_playbook_document
 from .pinecone_rag import select_response_plan_with_rag
 from .orchestrator import run_workflow
@@ -28,6 +28,52 @@ from .supabase_client import SupabaseRepository
 settings = get_settings()
 logger = logging.getLogger(__name__)
 email_scheduler = EmailAlertScheduler(settings)
+
+
+def _agent_may_approve(alert_level: str, assessment_result: dict) -> bool:
+    """Enforce approval policy from structured server-owned fields only."""
+    pre_approval = assessment_result.get("pre_approval") or {}
+    eligible_levels = set(pre_approval.get("eligible_alert_levels") or [])
+    return bool(
+        alert_level in {"investigate", "escalate"}
+        and alert_level in eligible_levels
+        and pre_approval.get("approved") is True
+        and pre_approval.get("reviewer_name") == AGENT_REVIEWER_NAME
+    )
+
+
+async def _approve_alert_from_agent(
+    repository: SupabaseRepository,
+    alert: dict,
+    assessment_result: dict,
+) -> dict:
+    if not _agent_may_approve(alert["alert_level"], assessment_result):
+        return {"approved": False, "actions_created": 0, "owner_notifications": {"sent": 0, "failed": 0, "skipped": 0}}
+    decision_time = datetime.now(timezone.utc)
+    rationale = str((assessment_result.get("pre_approval") or {}).get("rationale") or "Agent approval policy passed.")
+    decided = await repository.decide_alert(alert["id"], {
+        "status": "approved",
+        "reviewed_by": AGENT_REVIEWER_NAME,
+        "review_note": rationale[:1000],
+        "approved_at": decision_time.isoformat(),
+    })
+    if not decided:
+        return {"approved": False, "actions_created": 0, "owner_notifications": {"sent": 0, "failed": 0, "skipped": 0}}
+    condition_code = alert.get("conditions", {}).get("code") or alert.get("evidence_summary", {}).get("condition_code")
+    plan = await select_response_plan_with_rag(
+        settings,
+        condition_code,
+        alert["alert_level"],
+        query_context=f"Agent-approved alert {alert['id']}",
+    )
+    created_actions = await repository.create_actions(action_rows(alert["id"], plan["actions"], decision_time))
+    notifications = {"sent": 0, "failed": 0, "skipped": 0}
+    try:
+        notifications = await send_task_owner_notifications(repository, settings, alert, created_actions)
+    except Exception:
+        logger.exception("Task owner notification workflow failed for agent-approved alert %s", alert["id"])
+        notifications["failed"] = len(created_actions)
+    return {"approved": True, "actions_created": len(created_actions), "owner_notifications": notifications}
 
 
 @asynccontextmanager
@@ -118,7 +164,13 @@ async def create_predictive_assessment(request: PredictiveAssessmentRequest) -> 
                 "due_at": (now + timedelta(hours=followup["due_hours"])).isoformat(),
             })
         requests = await repository.get_followup_requests(request.hospital_code, request.condition_code, request.analysis_date.isoformat())
-        return {"assessment": assessment, "requests": requests}
+        agent_approval = {"approved": False, "actions_created": 0, "owner_notifications": {"sent": 0, "failed": 0, "skipped": 0}}
+        pending_alert = await repository.get_pending_alert_for_scope(
+            request.analysis_date.isoformat(), request.hospital_code, request.condition_code
+        )
+        if pending_alert:
+            agent_approval = await _approve_alert_from_agent(repository, pending_alert, result)
+        return {"assessment": assessment, "requests": requests, "agent_approval": agent_approval}
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     except (httpx.HTTPError, RuntimeError) as error:
@@ -428,15 +480,54 @@ async def generate_alerts(request: AlertGenerationRequest) -> dict:
         )
         created_alerts = generation.pop("created_alerts", [])
         notification_result = {"sent": 0, "failed": 0, "skipped": 0}
-        if created_alerts:
+        owner_notification_result = {"sent": 0, "failed": 0, "skipped": 0}
+        pending_alerts = []
+        auto_approved = 0
+        actions_created = 0
+        for created in created_alerts:
+            alert = await repository.get_alert(created["id"])
+            if not alert:
+                continue
+            assessment = await repository.get_latest_assessment(
+                alert["hospitals"]["code"], alert["conditions"]["code"], request.analysis_date.isoformat()
+            )
+            if assessment:
+                approval = await _approve_alert_from_agent(repository, alert, assessment["result"])
+            elif alert["alert_level"] in {"investigate", "escalate"}:
+                # Assess newly generated eligible alerts immediately so dynamic
+                # approval does not depend on a separate dashboard action.
+                agent_state = await create_predictive_assessment(PredictiveAssessmentRequest(
+                    analysis_date=request.analysis_date,
+                    hospital_code=alert["hospitals"]["code"],
+                    condition_code=alert["conditions"]["code"],
+                ))
+                approval = agent_state["agent_approval"]
+            else:
+                # Monitor alerts always remain in the human review queue.
+                approval = {"approved": False, "actions_created": 0, "owner_notifications": {"sent": 0, "failed": 0, "skipped": 0}}
+            if approval["approved"]:
+                auto_approved += 1
+                actions_created += approval["actions_created"]
+                for key in owner_notification_result:
+                    owner_notification_result[key] += approval["owner_notifications"][key]
+            else:
+                pending_alerts.append(alert)
+        if pending_alerts:
             try:
                 notification_result = await send_incident_review_notifications(
-                    repository, settings, created_alerts
+                    repository, settings, pending_alerts
                 )
             except Exception:
                 logger.exception("Incident review notification workflow failed")
-                notification_result["failed"] = len(created_alerts)
-        return {**generation, "incident_master_notifications": notification_result}
+                notification_result["failed"] = len(pending_alerts)
+        return {
+            **generation,
+            "pending_human_review": len(pending_alerts),
+            "auto_approved": auto_approved,
+            "actions_created": actions_created,
+            "incident_master_notifications": notification_result,
+            "owner_notifications": owner_notification_result,
+        }
     except RuntimeError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
     except httpx.HTTPError as error:

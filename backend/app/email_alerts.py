@@ -9,6 +9,7 @@ from datetime import date, datetime, time, timezone
 from email.message import EmailMessage
 from email.utils import format_datetime, formataddr, make_msgid
 from typing import Any
+from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .alert_service import generate_eligible_alerts
@@ -17,6 +18,7 @@ from .supabase_client import SupabaseRepository
 
 
 logger = logging.getLogger(__name__)
+_smtp_send_lock = asyncio.Lock()
 EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 LEVEL_RANK = {"investigate": 1, "escalate": 2}
 SOURCE_LABELS = {
@@ -113,13 +115,18 @@ def _build_email(alerts: list[dict[str, Any]], analysis_date: date, settings: Se
         text_rows.append(f"- {level.title()}: {condition} in {hospital}; supporting sources: {sources}")
     hospitals_affected = len({alert["hospitals"]["name"] for alert in alerts})
     conditions_affected = len({alert["conditions"]["name"] for alert in alerts})
-    review_url = _page_url(settings, "/alert-review")
-    safe_url = html.escape(review_url, quote=True)
+    review_url = _email_page_url(settings, "/alert-review")
+    review_text = f"Review the alerts: {review_url}" if review_url else "Open CrisisWatch on the configured workstation and choose Alert review."
+    review_cta = (
+        f'<a href="{html.escape(review_url, quote=True)}" style="color:#175c8f;font-size:13px;">Open alert review</a>'
+        if review_url else
+        '<div style="color:#526779;font-size:13px;line-height:20px;">Open CrisisWatch on the configured workstation and choose Alert review.</div>'
+    )
     text_body = (
         "CRISISWATCH CONSOLIDATED THRESHOLD REPORT\n\n"
         f"CrisisWatch detected {len(alerts)} corroborated threshold alert(s) across all configured hospitals and conditions for {formatted_date}.\n\n"
         + "\n".join(text_rows)
-        + f"\n\nReview the alerts: {review_url}\n\nHuman review is required before response actions are issued."
+        + f"\n\n{review_text}\n\nHuman review is required before response actions are issued."
     )
     html_body = f"""<!doctype html>
 <html>
@@ -145,7 +152,7 @@ def _build_email(alerts: list[dict[str, Any]], analysis_date: date, settings: Se
           <tr><td style="padding:0 34px 12px;"><div style="font-size:11px;font-weight:bold;letter-spacing:.7px;color:#63798b;text-transform:uppercase;">Alert details</div></td></tr>
           <tr><td style="padding:0 34px 14px;background:#f8fafb;">{''.join(alert_cards)}</td></tr>
           <tr><td align="center" style="padding:12px 34px 30px;background:#f8fafb;">
-            <a href="{safe_url}" style="display:inline-block;background:#175c8f;color:#ffffff;text-decoration:none;font-size:15px;font-weight:bold;padding:13px 22px;border-radius:7px;">Open alert review</a>
+            {review_cta}
           </td></tr>
           <tr><td style="padding:18px 34px;background:#f3f6f8;border-top:1px solid #e3eaee;text-align:center;color:#7a8997;font-size:11px;line-height:17px;">Scope: all configured hospitals and conditions.<br>Decision support only. Human review is required before response actions are issued.</td></tr>
         </table>
@@ -159,8 +166,13 @@ def _build_email(alerts: list[dict[str, Any]], analysis_date: date, settings: Se
 def _build_no_alert_email(analysis_date: date, settings: Settings) -> tuple[str, str, str]:
     formatted_date = analysis_date.strftime("%d %b %Y")
     safe_date = html.escape(formatted_date)
-    dashboard_url = _page_url(settings, "/command-dashboard")
-    safe_url = html.escape(dashboard_url, quote=True)
+    dashboard_url = _email_page_url(settings, "/command-dashboard")
+    dashboard_text = f"Open the surveillance dashboard: {dashboard_url}" if dashboard_url else "Open CrisisWatch on the configured workstation and choose Command dashboard."
+    dashboard_cta = (
+        f'<a href="{html.escape(dashboard_url, quote=True)}" style="color:#175c8f;font-size:13px;">Open surveillance dashboard</a>'
+        if dashboard_url else
+        '<div style="color:#526779;font-size:13px;line-height:20px;">Open CrisisWatch on the configured workstation and choose Command dashboard.</div>'
+    )
     subject = f"[CLEAR] CrisisWatch daily threshold status - {analysis_date.isoformat()}"
     text_body = (
         "CRISISWATCH DAILY STATUS\n\n"
@@ -168,7 +180,7 @@ def _build_no_alert_email(analysis_date: date, settings: Settings) -> tuple[str,
         "Status: No threshold crossings detected\n"
         "Action required: No response action is required\n"
         "Monitoring: Surveillance continues on the configured schedule\n\n"
-        f"Open the surveillance dashboard: {dashboard_url}\n\n"
+        f"{dashboard_text}\n\n"
         "This is an automated operational status notification from CrisisWatch."
     )
     html_body = f"""<!doctype html>
@@ -205,7 +217,7 @@ def _build_no_alert_email(analysis_date: date, settings: Settings) -> tuple[str,
             </table>
           </td></tr>
           <tr><td align="center" style="padding:0 34px 30px;">
-            <a href="{safe_url}" style="display:inline-block;background:#175c8f;color:#ffffff;text-decoration:none;font-size:15px;font-weight:bold;padding:13px 22px;border-radius:7px;">Open surveillance dashboard</a>
+            {dashboard_cta}
           </td></tr>
           <tr><td style="padding:18px 34px;background:#f7f9fb;border-top:1px solid #e5ebef;text-align:center;color:#7a8997;font-size:11px;line-height:17px;">Scope: all configured hospitals and conditions.<br>Automated operational status from CrisisWatch. Human oversight remains required.</td></tr>
         </table>
@@ -223,7 +235,7 @@ def _send_smtp(
     subject: str,
     text_body: str,
     html_body: str,
-) -> None:
+) -> str:
     if not settings.smtp_configured:
         raise RuntimeError("SMTP is not configured on the API server")
     message = EmailMessage()
@@ -258,6 +270,20 @@ def _send_smtp(
             message["Message-ID"],
             len(recipients) + len(cc),
         )
+        return str(message["Message-ID"])
+
+
+async def _send_smtp_sequentially(
+    settings: Settings,
+    recipients: list[str],
+    cc: list[str],
+    subject: str,
+    text_body: str,
+    html_body: str,
+) -> str:
+    """Prevent concurrent requests from sending through SMTP at the same time."""
+    async with _smtp_send_lock:
+        return await asyncio.to_thread(_send_smtp, settings, recipients, cc, subject, text_body, html_body)
 
 
 def _format_due_at(value: str | None, timezone_name: str) -> str:
@@ -272,6 +298,15 @@ def _format_due_at(value: str | None, timezone_name: str) -> str:
 
 def _page_url(settings: Settings, path: str) -> str:
     return f"{settings.public_app_url.rstrip('/')}/{path.lstrip('/')}"
+
+
+def _email_page_url(settings: Settings, path: str) -> str | None:
+    """Only send links recipients can reach outside the sender's computer."""
+    base_url = settings.public_app_url.strip()
+    parsed = urlsplit(base_url)
+    if parsed.hostname in {"localhost", "127.0.0.1", "::1"}:
+        return None
+    return _page_url(settings, path) if parsed.scheme == "https" and parsed.netloc else None
 
 
 async def send_incident_review_notifications(
@@ -301,7 +336,7 @@ async def send_incident_review_notifications(
             continue
         try:
             recipient = normalize_emails([recipient])[0]
-            review_url = _page_url(settings, "/alert-review")
+            review_url = _email_page_url(settings, "/alert-review")
             sources = [
                 SOURCE_LABELS.get(source, str(source).replace("_", " ").title())
                 for source in evidence.get("supporting_sources", [])
@@ -328,13 +363,18 @@ async def send_incident_review_notifications(
             safe_hospital = html.escape(hospital)
             safe_level = html.escape(level.title())
             safe_analysis_date = html.escape(analysis_date)
-            safe_review_url = html.escape(review_url, quote=True)
+            review_text = f"\nOpen alert review: {review_url}\n" if review_url else "\nOpen CrisisWatch on the configured workstation to review this alert.\n"
+            alert_review_cta = (
+                f'<a href="{html.escape(review_url, quote=True)}" style="color:#175c8f;font-size:13px;">Open alert review</a>'
+                if review_url else
+                '<div style="color:#526779;font-size:13px;line-height:20px;">Open CrisisWatch on the configured workstation to review this alert.</div>'
+            )
             text_body = (
                 "CRISISWATCH ALERT REVIEW REQUIRED\n\n"
                 "A corroborated surveillance signal has been submitted for Incident Commander review.\n\n"
                 f"Condition: {condition}\nHospital: {hospital}\nLevel: {level.title()}\n"
                 f"Analysis date: {analysis_date}\nSupporting sources: {source_text}\nAlert: #{alert['id']}\n\n"
-                f"Open alert review: {review_url}\n\n"
+                f"{review_text}\n"
                 "No response task is issued until an Incident Commander records a decision."
             )
             html_body = f"""<!doctype html>
@@ -373,7 +413,7 @@ async def send_incident_review_notifications(
             </table>
           </td></tr>
           <tr><td align="center" style="padding:0 34px 30px;">
-            <a href="{safe_review_url}" style="display:inline-block;background:#175c8f;color:#ffffff;text-decoration:none;font-size:15px;font-weight:bold;padding:13px 22px;border-radius:7px;">Open alert review</a>
+            {alert_review_cta}
           </td></tr>
           <tr><td style="padding:18px 34px;background:#f7f9fb;border-top:1px solid #e5ebef;text-align:center;color:#7a8997;font-size:11px;line-height:17px;">Decision support only.<br>An Incident Commander must approve or dismiss this alert.</td></tr>
         </table>
@@ -381,7 +421,8 @@ async def send_incident_review_notifications(
     </table>
   </body>
 </html>"""
-            await asyncio.to_thread(_send_smtp, settings, [recipient], [], subject, text_body, html_body)
+            message_id = await _send_smtp_sequentially(settings, [recipient], [], subject, text_body, html_body)
+            logger.info("Incident review alert %s accepted by SMTP as %s", alert["id"], message_id)
             record.update({"recipient": recipient, "status": "success", "error_message": None})
             counts["sent"] += 1
         except Exception as error:
@@ -435,7 +476,8 @@ async def run_email_alert(
         subject, text_body, html_body = _build_no_alert_email(analysis_date, settings)
     delivery["subject"] = subject
     try:
-        await asyncio.to_thread(_send_smtp, settings, recipients, cc, subject, text_body, html_body)
+        message_id = await _send_smtp_sequentially(settings, recipients, cc, subject, text_body, html_body)
+        logger.info("Threshold report for %s accepted by SMTP as %s", analysis_date, message_id)
         delivery.update({"status": "success", "error_message": None})
     except Exception as error:
         logger.exception("Email alert delivery failed")
@@ -477,13 +519,15 @@ async def send_task_owner_notifications(
             hospital = alert["hospitals"]["name"]
             condition = alert["conditions"]["name"]
             due = _format_due_at(action.get("due_at"), config.get("timezone") or "UTC")
+            tracker_url = _email_page_url(settings, "/action-tracker")
+            tracker_text = f"\nOpen the action tracker: {tracker_url}\n" if tracker_url else "\nOpen CrisisWatch on the configured workstation to review this task.\n"
             text_body = (
                 "NEW CRISISWATCH RESPONSE TASK\n\n"
                 f"A response task has been assigned to {owner_role} following Incident Commander approval.\n\n"
                 f"TASK\n{action['action_text']}\n\n"
                 f"Condition: {condition}\nHospital: {hospital}\nOwner: {owner_role}\n"
                 f"Timeframe: {action['timeframe']}\nDue: {due}\nAlert: #{alert['id']}\n\n"
-                f"Open the action tracker: {_page_url(settings, '/action-tracker')}\n\n"
+                f"{tracker_text}\n"
                 "This is an operational notification from CrisisWatch."
             )
             safe_owner = html.escape(owner_role)
@@ -492,7 +536,11 @@ async def send_task_owner_notifications(
             safe_hospital = html.escape(hospital)
             safe_timeframe = html.escape(action["timeframe"])
             safe_due = html.escape(due)
-            safe_url = html.escape(_page_url(settings, "/action-tracker"), quote=True)
+            action_tracker_cta = (
+                f'<a href="{html.escape(tracker_url, quote=True)}" style="color:#175c8f;font-size:13px;">Open action tracker</a>'
+                if tracker_url else
+                '<div style="color:#526779;font-size:13px;line-height:20px;">Open CrisisWatch on the configured workstation to review this task.</div>'
+            )
             html_body = f"""<!doctype html>
 <html>
   <body style="margin:0;padding:0;background:#f2f6f8;font-family:Arial,Helvetica,sans-serif;color:#17324a;">
@@ -530,7 +578,7 @@ async def send_task_owner_notifications(
             </table>
           </td></tr>
           <tr><td align="center" style="padding:0 34px 30px;">
-            <a href="{safe_url}" style="display:inline-block;background:#175c8f;color:#ffffff;text-decoration:none;font-size:15px;font-weight:bold;padding:13px 22px;border-radius:7px;">Open action tracker</a>
+            {action_tracker_cta}
           </td></tr>
           <tr><td style="padding:18px 34px;background:#f7f9fb;border-top:1px solid #e5ebef;text-align:center;color:#7a8997;font-size:11px;line-height:17px;">This is an operational notification from CrisisWatch.<br>Human oversight remains required for response decisions.</td></tr>
         </table>
@@ -538,7 +586,8 @@ async def send_task_owner_notifications(
     </table>
   </body>
 </html>"""
-            await asyncio.to_thread(_send_smtp, settings, [recipient], [], subject, text_body, html_body)
+            message_id = await _send_smtp_sequentially(settings, [recipient], [], subject, text_body, html_body)
+            logger.info("Task owner alert %s action %s accepted by SMTP as %s", alert["id"], action["id"], message_id)
             record.update({"recipient": recipient, "status": "success", "error_message": None})
             counts["sent"] += 1
         except Exception as error:

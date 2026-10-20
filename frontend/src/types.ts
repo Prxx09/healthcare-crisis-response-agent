@@ -214,6 +214,7 @@ export interface PredictiveAssessment {
     pressure: { level: string; expected_day_7_visits: number; upper_scenario_day_7_visits: number; expected_growth_pct: number; occupancy_pct: number | null; first_constraint: string | null; interpretation: string };
     checks: Array<{ tool: string; reason: string; selected_by: "model" | "policy"; result: Record<string, unknown> }>;
     prior_requests: Array<{ request_key: string; status: string; completion_note: string | null }>;
+    pre_approval: { approved: boolean; reviewer_name: string; eligible_alert_levels: Array<"investigate" | "escalate">; rationale: string };
     approval_boundary: string;
   };
 }
@@ -226,4 +227,8 @@ export interface AgentFollowup {
   status: "open" | "completed";
   completion_note: string | null;
 }
-export interface PredictiveAgentState { assessment: PredictiveAssessment | null; requests: AgentFollowup[] }
+export interface PredictiveAgentState {
+  assessment: PredictiveAssessment | null;
+  requests: AgentFollowup[];
+  agent_approval?: { approved: boolean; actions_created: number; owner_notifications: { sent: number; failed: number; skipped: number } };
+}

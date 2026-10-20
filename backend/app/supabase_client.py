@@ -153,6 +153,17 @@ class SupabaseRepository:
         })
         return rows[0] if rows else None
 
+    async def get_pending_alert_for_scope(self, analysis_date: str, hospital_code: str, condition_code: str) -> dict[str, Any] | None:
+        rows = await self.privileged_get("alerts", {
+            "select": "id,analysis_date,alert_level,evidence_summary,rule_version,status,reviewed_by,review_note,approved_at,created_at,hospitals!inner(code,name),conditions!inner(code,name)",
+            "analysis_date": f"eq.{analysis_date}",
+            "status": "eq.pending_approval",
+            "hospitals.code": f"eq.{hospital_code}",
+            "conditions.code": f"eq.{condition_code}",
+            "limit": "1",
+        })
+        return rows[0] if rows else None
+
     async def get_alerts_for_date(self, analysis_date: str) -> list[dict[str, Any]]:
         return await self.privileged_get("alerts", {
             "select": "id,analysis_date,alert_level,evidence_summary,rule_version,status,reviewed_by,review_note,approved_at,created_at,hospitals!inner(code,name),conditions!inner(code,name)",

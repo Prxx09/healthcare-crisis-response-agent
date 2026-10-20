@@ -19,7 +19,9 @@ async def generate_eligible_alerts(
         start_date.isoformat(), analysis_date.isoformat(), hospital_code, condition_code
     )
     clusters = summarise_clusters(detect_source_signals(rows, analysis_date, baseline_days))
-    eligible = [cluster for cluster in clusters if cluster["corroborated"] and cluster["level"] != "monitor"]
+    # Every corroborated level is reviewable. Monitor is deliberately retained
+    # for human review; only Investigate/Escalate may later pass agent policy.
+    eligible = [cluster for cluster in clusters if cluster["corroborated"]]
     hospitals_by_code = {item["code"]: item["id"] for item in await repository.get_hospitals()}
     conditions_by_code = {item["code"]: item["id"] for item in await repository.get_conditions()}
     created: list[dict[str, Any]] = []

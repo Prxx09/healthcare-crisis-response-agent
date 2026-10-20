@@ -32,12 +32,18 @@ if [[ "$backend_port" != "8000" && "$backend_port" != "8001" && "$backend_port" 
   echo "BACKEND_PORT must be 8000, 8001, or 8002." >&2
   exit 1
 fi
+frontend_port="${FRONTEND_PORT:-5173}"
+if [[ "$frontend_port" != "5173" && "$frontend_port" != "5174" ]]; then
+  echo "FRONTEND_PORT must be 5173 or 5174." >&2
+  exit 1
+fi
+export PUBLIC_APP_URL="http://127.0.0.1:${frontend_port}"
 
 (cd backend && ../.venv/bin/uvicorn app.main:app --reload --host 127.0.0.1 --port "$backend_port") &
 api_pid=$!
-npm run dev --prefix frontend -- --host 127.0.0.1 &
+npm run dev --prefix frontend -- --host 127.0.0.1 --port "$frontend_port" --strictPort &
 web_pid=$!
 
 echo "API:       http://127.0.0.1:$backend_port"
-echo "Dashboard: http://127.0.0.1:5173"
+echo "Dashboard: $PUBLIC_APP_URL"
 wait -n "$api_pid" "$web_pid"

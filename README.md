@@ -265,8 +265,11 @@ Backend variables:
 | `SMTP_USERNAME`, `SMTP_PASSWORD` | When SMTP requires authentication | Server-only mail credentials or app password |
 | `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME` | For email alerts | Sender address and display name |
 | `SMTP_USE_TLS` | No | Enable STARTTLS; defaults to `true` |
-| `PUBLIC_APP_URL` | No | Dashboard link included in notification emails |
+| `PUBLIC_APP_URL` | No | HTTPS frontend URL for links in notification emails; local loopback URLs are omitted because recipients cannot open them and may have them filtered by enterprise mail gateways |
 | `EMAIL_SCHEDULER_POLL_SECONDS` | No | Scheduler check interval; defaults to 30 seconds |
+
+SMTP acceptance is the last delivery state the application can verify. Task owner and review emails are sent sequentially, including when separate API requests arrive together. If an owner message is accepted but absent from the recipient inbox, check the sender's bounce messages and the recipient organization's mail trace or quarantine using the recipient, subject, and send time. All owner roles mapped to the same address will deliver to that one mailbox. Changing recipient settings does not resend actions that were already approved.
+For local development, emails give navigation instructions instead of including a `localhost` or `127.0.0.1` URL. Set `PUBLIC_APP_URL` to a recipient-accessible HTTPS frontend address to include a clickable link.
 | `PINECONE_RAG_ENABLED` | No | Enable playbook retrieval-augmented context; defaults to `false` |
 | `PINECONE_API_KEY` | When using Pinecone | Server-only Pinecone API key |
 | `PINECONE_INDEX_NAME` | When using Pinecone | Pinecone index containing approved playbook embeddings |

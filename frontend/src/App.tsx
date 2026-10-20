@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Activity, AlertTriangle, CheckCircle2, Clock3, Database, Download, FileCheck2, ListChecks, Mail, RefreshCw, ShieldCheck, Sparkles, Upload, Workflow as WorkflowIcon, XCircle } from "lucide-react";
+import { Activity, AlertTriangle, CheckCircle2, Clock3, Database, Download, FileCheck2, ListChecks, Mail, RefreshCw, ShieldCheck, Sparkles, Upload, Workflow as WorkflowIcon, X, XCircle } from "lucide-react";
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api } from "./api";
 import { EmailAlertsPage } from "./EmailAlertsPage";
@@ -75,6 +75,7 @@ export default function App() {
   const [reviewer, setReviewer] = useState("");
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
   const [alertLoading, setAlertLoading] = useState(false);
+  const [pendingAlertDecision, setPendingAlertDecision] = useState<{ id: number; status: "approved" | "dismissed" } | null>(null);
   const [playbookLibrary, setPlaybookLibrary] = useState<PlaybookLibrary | null>(null);
   const [playbookValidation, setPlaybookValidation] = useState<PlaybookValidation | null>(null);
   const [playbookMessage, setPlaybookMessage] = useState<string | null>(null);
@@ -332,13 +333,19 @@ export default function App() {
       const result = await api.generateAlerts(analysisDate, targetHospital, targetCondition);
       if (result.created > 0) {
         const notification = result.incident_master_notifications;
+        const reviewSummary = result.pending_human_review
+          ? ` ${result.pending_human_review} alert${result.pending_human_review === 1 ? "" : "s"} sent for human review.`
+          : "";
+        const approvalSummary = result.auto_approved
+          ? ` ${result.auto_approved} alert${result.auto_approved === 1 ? "" : "s"} approved by the Predictive Investigation Agent; ${result.actions_created} response task${result.actions_created === 1 ? "" : "s"} created.`
+          : "";
         const emailSummary = notification.sent
           ? ` Incident master email sent.`
           : notification.failed
             ? ` Incident master email failed; the alert remains in the review queue.`
-            : ` Incident master email skipped because no address is configured.`;
-        setAlertMessage(`${result.created} alert sent for human review.${emailSummary}`);
-        navigate("alerts");
+            : result.pending_human_review ? ` Incident master email skipped because no address is configured.` : "";
+        setAlertMessage(`${result.created} alert${result.created === 1 ? "" : "s"} created.${reviewSummary}${approvalSummary}${emailSummary}`);
+        navigate(result.pending_human_review ? "alerts" : "actions");
       } else {
         setAlertMessage(result.existing > 0 ? "This threshold alert has already been submitted for review." : "No eligible corroborated alert was found.");
       }
@@ -351,18 +358,18 @@ export default function App() {
   async function decideAlert(id: number, status: "approved" | "dismissed") {
     if (reviewer.trim().length < 2) { setAlertMessage("Enter the Incident Commander name before recording a decision."); return; }
     if (!window.confirm(`Confirm ${status === "approved" ? "approving" : "dismissing"} this alert?`)) return;
-    setAlertLoading(true);
+    setPendingAlertDecision({ id, status });
     setAlertMessage(null);
     try {
       const result = await api.decideAlert(id, status, reviewer.trim());
       setAlerts((items) => items.filter((item) => item.id !== id));
       const notificationSummary = status === "approved" && result.actions_created > 0
-        ? ` ${result.owner_notifications.sent} owner email(s) sent${result.owner_notifications.failed ? `; ${result.owner_notifications.failed} failed` : ""}${result.owner_notifications.skipped ? `; ${result.owner_notifications.skipped} skipped` : ""}.`
+        ? ` ${result.owner_notifications.sent} owner email(s) accepted by the mail server${result.owner_notifications.failed ? `; ${result.owner_notifications.failed} failed` : ""}${result.owner_notifications.skipped ? `; ${result.owner_notifications.skipped} skipped` : ""}.`
         : "";
       setAlertMessage(`Alert ${status}. The decision was recorded in the audit trail.${notificationSummary}`);
     } catch (reason) {
       setAlertMessage(reason instanceof Error ? reason.message : "Unable to record the decision.");
-    } finally { setAlertLoading(false); }
+    } finally { setPendingAlertDecision(null); }
   }
 
   const chartData = useMemo(() => {
@@ -439,6 +446,7 @@ export default function App() {
         <header><div><p className="eyebrow">Healthcare Crisis Prediction and Response Agent</p><h1>{view === "dashboard" ? "Surveillance command dashboard" : view === "alerts" ? "Incident Commander alert review" : view === "actions" ? "Incident action tracker" : view === "emails" ? "Threshold email alerts" : "Response playbook library"}</h1><p className="subtitle">{view === "dashboard" ? "Review signals, supporting evidence and escalation readiness." : view === "alerts" ? "Approve or dismiss corroborated alerts before any response action is issued." : view === "actions" ? "Assign and track approved response tasks through completion." : view === "emails" ? "Configure scheduled delivery, recipients and manual threshold notifications." : "Validate operational guidance before it is considered for controlled activation."}</p></div><div className="system-status" role="status"><span aria-hidden="true"></span> Data pipeline active</div></header>
 
         {view === "emails" && <EmailAlertsPage analysisDate={analysisDate} />}
+        {view === "actions" && timeline && <div className="timeline-dismiss-row"><button className="timeline-close" onClick={() => setTimeline(null)}><X size={16} /> Close timeline</button></div>}
 
         {view === "actions" ? <section className="action-page"><div className="card action-toolbar"><label>Assign updates as<input value={actionAssignee} onChange={(event) => setActionAssignee(event.target.value)} placeholder="Team member or role" /></label><button onClick={() => setRefreshKey((value) => value + 1)} disabled={actionLoading}><RefreshCw size={16} /> Refresh actions</button></div><NotificationBanner message={actionMessage} onDismiss={() => setActionMessage(null)} />{timeline && <div className="card timeline-panel"><div className="panel-heading"><div><h2>Incident timeline · Alert #{timeline.alert_id}</h2><p>Chronological alert decision and action history</p></div><button className="report-link" onClick={() => downloadSituationReport(timeline.alert_id)}><Download size={14} /> Download PDF</button></div><div className="timeline-list">{timeline.events.map((event) => <div key={`${event.timestamp}-${event.event}`}><span><Clock3 size={12} /></span><div><strong>{event.title}</strong><p>{event.detail}</p><small>{new Date(event.timestamp).toLocaleString()}</small></div></div>)}</div></div>}<div className="review-heading"><div><h2>Approved response actions</h2><p>Tasks are created only after Incident Commander approval.</p></div><span>{actions.filter((item) => item.status !== "completed" && item.status !== "cancelled").length} open</span></div>{actionLoading && actions.length === 0 ? <div className="card review-empty">Loading action tracker…</div> : actions.length === 0 ? <div className="card review-empty"><ListChecks size={36} /><strong>No response actions</strong><p>Approved alerts will create tasks from the selected playbook.</p></div> : <div className="action-tracker-list">{actions.map((item) => <article className="card tracked-action" key={item.id}><div className="tracked-heading"><span className={`task-status ${item.status}`}>{item.status.replaceAll("_", " ")}</span><div><strong>{item.action_text}</strong><p>{item.alerts.conditions.name} · {item.alerts.hospitals.name} · Alert #{item.alert_id}</p></div></div><div className="task-meta"><span><small>Owner</small>{item.owner_role}</span><span><small>Assignee</small>{item.assignee_name || "Unassigned"}</span><span><small>Timeframe</small>{item.timeframe}</span><span><small>Due</small>{item.due_at ? new Date(item.due_at).toLocaleString() : "Ongoing"}</span></div><div className="alert-actions"><button className="timeline-button" onClick={() => loadTimeline(item.alert_id)} disabled={actionLoading}><Clock3 size={14} /> Timeline</button><button className="report-link compact" onClick={() => downloadSituationReport(item.alert_id)}><Download size={14} /> PDF report</button>{item.status === "pending" && <button className="generate-button" onClick={() => updateAction(item.id, "in_progress")} disabled={actionLoading}>Start action</button>}{item.status === "in_progress" && <button className="approve-button" onClick={() => updateAction(item.id, "completed")} disabled={actionLoading}><CheckCircle2 size={16} /> Complete</button>}{item.status !== "completed" && item.status !== "cancelled" && <button className="dismiss" onClick={() => updateAction(item.id, "cancelled")} disabled={actionLoading}>Cancel</button>}</div></article>)}</div>}</section> : view === "playbooks" ? <section className="playbook-page">
           <div className="card playbook-overview"><div><span>Active playbook</span><strong>Version {playbookLibrary?.active_version ?? "—"}</strong><p>Current bounded response actions used by the recommendation engine.</p></div><div><span>Supported files</span><strong>{playbookLibrary?.supported_formats.map((item) => item.toUpperCase()).join(" · ") ?? "PDF · DOCX · YAML · JSON"}</strong><p>Maximum file size {playbookLibrary ? `${Math.round(playbookLibrary.max_file_bytes / 1024 / 1024)} MB` : "5 MB"}.</p></div></div>
@@ -448,8 +456,13 @@ export default function App() {
         </section> : view === "alerts" ? <section className="review-page">
           <div className="card review-toolbar"><label>Incident Commander<input value={reviewer} onChange={(event) => setReviewer(event.target.value)} placeholder="Enter reviewer name" /></label><button onClick={() => setRefreshKey((value) => value + 1)} disabled={alertLoading}><RefreshCw size={16} /> Refresh queue</button></div>
           <NotificationBanner message={alertMessage} onDismiss={() => setAlertMessage(null)} />
-          <div className="review-heading"><div><h2>Pending approval</h2><p>Only corroborated investigate or escalate signals enter this queue.</p></div><span>{alerts.length} pending</span></div>
-          {alertLoading && alerts.length === 0 ? <div className="card review-empty">Loading review queue…</div> : alerts.length === 0 ? <div className="card review-empty"><CheckCircle2 size={36} /><strong>Review queue is clear</strong><p>Generate an alert from an eligible signal on the command dashboard.</p></div> : <div className="alert-list">{alerts.map((item) => <article className="card alert-card" key={item.id}><div className="alert-summary"><span className={`level ${item.alert_level}`}>{levelLabel(item.alert_level)}</span><div><h3>{item.conditions.name} · {item.hospitals.name}</h3><p>Analysis date {item.analysis_date} · {item.evidence_summary.supporting_sources.length} supporting sources</p></div></div><div className="alert-evidence">{item.evidence_summary.signals.map((signal) => <span key={signal.signal_source}><strong>{SOURCE_LABELS[signal.signal_source] ?? signal.signal_source}</strong>{signal.current_count} ({signal.percent_change > 0 ? "+" : ""}{signal.percent_change}%)</span>)}</div><div className="alert-actions"><button className="dismiss" onClick={() => decideAlert(item.id, "dismissed")} disabled={alertLoading}><XCircle size={16} /> Dismiss</button><button className="approve-button" onClick={() => decideAlert(item.id, "approved")} disabled={alertLoading}><CheckCircle2 size={16} /> Approve</button></div></article>)}</div>}
+          <div className="review-heading"><div><h2>Pending approval</h2><p>Monitor alerts always require human review; Investigate and Escalate remain here unless agent pre-approval policy passes.</p></div><span>{alerts.length} pending</span></div>
+          {alertLoading && alerts.length === 0 ? <div className="card review-empty">Loading review queue…</div> : alerts.length === 0 ? <div className="card review-empty"><CheckCircle2 size={36} /><strong>Review queue is clear</strong><p>Generate an alert from an eligible signal on the command dashboard.</p></div> : <div className="alert-list">{alerts.map((item) => {
+            const pendingDecision = pendingAlertDecision?.id === item.id;
+            const approving = pendingDecision && pendingAlertDecision.status === "approved";
+            const dismissing = pendingDecision && pendingAlertDecision.status === "dismissed";
+            return <article className="card alert-card" key={item.id}><div className="alert-summary"><span className={`level ${item.alert_level}`}>{levelLabel(item.alert_level)}</span><div><h3>{item.conditions.name} · {item.hospitals.name}</h3><p>Analysis date {item.analysis_date} · {item.evidence_summary.supporting_sources.length} supporting sources</p></div></div><div className="alert-evidence">{item.evidence_summary.signals.map((signal) => <span key={signal.signal_source}><strong>{SOURCE_LABELS[signal.signal_source] ?? signal.signal_source}</strong>{signal.current_count} ({signal.percent_change > 0 ? "+" : ""}{signal.percent_change}%)</span>)}</div><div className="alert-actions"><button className={`dismiss ${dismissing ? "is-loading" : ""}`} onClick={() => decideAlert(item.id, "dismissed")} disabled={pendingDecision}><XCircle size={16} /> {dismissing ? "Dismissing…" : "Dismiss"}</button><button className={`approve-button ${approving ? "is-loading" : ""}`} onClick={() => decideAlert(item.id, "approved")} disabled={pendingDecision}><CheckCircle2 size={16} /> {approving ? "Approving…" : "Approve"}</button></div></article>;
+          })}</div>}
         </section> : view === "dashboard" ? <>
 
         <section className="filters card">
@@ -507,7 +520,7 @@ export default function App() {
             <div className="chart-wrap" role="img" aria-label={`Twenty-eight-day surveillance trend for ${scopeLabel}. Three series show visits, lab positives, and pharmacy demand.`}><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" stroke="#e7edf3" /><XAxis dataKey="date" tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} /><Tooltip /><Legend /><Line type="monotone" dataKey="visits" name="Visits" stroke="#1261a0" strokeWidth={2.5} dot={false} /><Line type="monotone" dataKey="lab_positives" name="Lab positives" stroke="#dc6b35" strokeWidth={2} dot={false} /><Line type="monotone" dataKey="pharmacy_demand" name="Pharmacy demand" stroke="#2c9c83" strokeWidth={2} dot={false} /></LineChart></ResponsiveContainer></div>
           </article>
 
-          <article className="card panel evidence-panel"><div className="panel-heading"><div><h2>Evidence review</h2><p>Transparent rule output · {scopeLabel}</p></div>{selectedClusters.length > 0 && <div className="evidence-actions"><button className="briefing-button" onClick={generateFilteredBriefing} disabled={briefingLoading}><Sparkles size={13} /> {briefingLoading ? "Preparing…" : "Brief filtered scope"}</button>{hasSpecificScope && selectedClusters.some((item) => item.corroborated && item.level !== "monitor") && <button className="generate-button" onClick={() => generateAlert()} disabled={alertLoading}>Send to review</button>}</div>}</div>
+          <article className="card panel evidence-panel"><div className="panel-heading"><div><h2>Evidence review</h2><p>Transparent rule output · {scopeLabel}</p></div>{selectedClusters.length > 0 && <div className="evidence-actions"><button className="briefing-button" onClick={generateFilteredBriefing} disabled={briefingLoading}><Sparkles size={13} /> {briefingLoading ? "Preparing…" : "Brief filtered scope"}</button>{hasSpecificScope && selectedClusters.some((item) => item.corroborated) && <button className="generate-button" onClick={() => generateAlert()} disabled={alertLoading}>Submit alert</button>}</div>}</div>
              {selectedClusters.length === 0 ? <div className="empty"><CheckCircle2 size={34} /><strong>No threshold crossed</strong><p>The current values remain within the configured review thresholds.</p></div> : <div className="evidence-cluster-grid">{displayedClusters.map((cluster) => {
                const clusterKey = `${cluster.hospital_code}-${cluster.condition_code}`;
                const isExpanded = expandedClusterKey === clusterKey;
@@ -526,7 +539,7 @@ export default function App() {
                      <span><small>Source level</small>{levelLabel(signal.level)}</span>
                    </div>)}</div>
                  </div>}
-                 {isExpanded && <div className="evidence-card-footer"><span className="evidence-expand-label">Hide details</span><div className="evidence-card-actions" onClick={(event) => event.stopPropagation()}><button className="briefing-button" onClick={() => generateCaseBriefing(cluster.hospital_code, cluster.condition_code)} disabled={caseBriefingLoading}><Sparkles size={14} /> {caseBriefingLoading && caseBriefingKey === clusterKey ? "Preparing…" : "Brief this case"}</button>{cluster.corroborated && cluster.level !== "monitor" && <button className="generate-button" onClick={() => generateAlert(cluster.hospital_code, cluster.condition_code)} disabled={alertLoading}>Send case to review</button>}</div></div>}
+                 {isExpanded && <div className="evidence-card-footer"><span className="evidence-expand-label">Hide details</span><div className="evidence-card-actions" onClick={(event) => event.stopPropagation()}><button className="briefing-button" onClick={() => generateCaseBriefing(cluster.hospital_code, cluster.condition_code)} disabled={caseBriefingLoading}><Sparkles size={14} /> {caseBriefingLoading && caseBriefingKey === clusterKey ? "Preparing…" : "Brief this case"}</button>{cluster.corroborated && <button className="generate-button" onClick={() => generateAlert(cluster.hospital_code, cluster.condition_code)} disabled={alertLoading}>{cluster.level === "monitor" ? "Send for human review" : "Submit case"}</button>}</div></div>}
                  {isExpanded && caseBriefingKey === clusterKey && (caseBriefing || caseBriefingLoading || caseBriefingError) && <details className="case-briefing-dropdown" open={caseBriefingOpen} onClick={(event) => event.stopPropagation()} onToggle={(event) => setCaseBriefingOpen(event.currentTarget.open)}>
                    <summary><span><Sparkles size={16} /> Case briefing</span><small>{caseBriefingLoading ? "Preparing this case briefing…" : caseBriefing ? `${cluster.condition} · ${cluster.hospital}` : "Unable to generate briefing"}</small></summary>
                    {caseBriefingLoading && <div className="briefing-inline-loading">Reviewing the evidence for this case…</div>}

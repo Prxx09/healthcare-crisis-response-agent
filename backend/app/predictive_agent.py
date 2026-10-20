@@ -16,6 +16,7 @@ from .supabase_client import SupabaseRepository
 
 logger = logging.getLogger(__name__)
 TOOLS = ("check_history", "check_labs", "check_reporting", "check_pharmacy", "check_readiness")
+AGENT_REVIEWER_NAME = "Predictive Investigation Agent"
 
 
 def _daily(rows: list[dict[str, Any]]) -> dict[str, int]:
@@ -181,10 +182,27 @@ async def run_predictive_agent(repository: SupabaseRepository, settings: Setting
     if pressure["level"] == "prepare" or (pressure["level"] == "watch" and pressure["occupancy_pct"] is None):
         followups.append({"request_key": "verify_readiness", "owner_role": "Operations lead", "request_text": f"Check {pressure['first_constraint'] or 'staffing and supplies'} against the seven-day demand scenarios and report available capacity.", "due_hours": 8})
     status = "uncertain" if weak_data or contradictory else pressure["level"]
+    pre_approved = bool(
+        status in {"watch", "prepare"}
+        and confidence == "moderate"
+        and not followups
+        and not contradictory
+        and not weak_data
+    )
+    pre_approval = {
+        "approved": pre_approved,
+        "reviewer_name": AGENT_REVIEWER_NAME,
+        "eligible_alert_levels": ["investigate", "escalate"],
+        "rationale": (
+            "Agent checks found corroborating evidence with moderate confidence and no unresolved verification request."
+            if pre_approved else
+            "Human review retained because the assessment is routine or unresolved evidence, confidence, or verification requirements remain."
+        ),
+    }
     return {
         "analysis_date": analysis_date.isoformat(), "hospital_code": hospital, "condition_code": condition,
         "forecast": forecast, "pressure": pressure, "assessment": {"status": status, "confidence": confidence, "hypotheses": hypotheses, "historical_comparison": history, "contradictory_evidence": contradictory, "data_quality_concern": weak_data, "boundary": "Synthetic aggregate planning assessment; no outbreak diagnosis or admission forecast."},
-        "checks": checks, "followups": followups,
+        "checks": checks, "followups": followups, "pre_approval": pre_approval,
         "next_review_at": (datetime.now(timezone.utc) + timedelta(hours=4 if followups else 24)).isoformat(),
-        "approval_boundary": "The agent can create internal evidence requests. External communication, clinical decisions, purchasing, and resource transfers require authorized approval.",
+        "approval_boundary": "The agent may pre-approve internal response tasks only for Investigate or Escalate alerts when all policy checks pass. Monitor alerts and controlled external or clinical actions retain human review.",
     }

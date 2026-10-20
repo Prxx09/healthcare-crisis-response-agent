@@ -68,7 +68,7 @@ export function EmailAlertsPage({ analysisDate }: Props) {
     setLoading(true); setMessage(null);
     try {
       const result = await api.sendEmailAlerts(analysisDate);
-      setMessage(result.status === "success" ? `Consolidated report emailed with ${result.alerts_sent} threshold alert(s).` : "Unable to send the consolidated report.");
+      setMessage(result.status === "success" ? `Mail server accepted the consolidated report with ${result.alerts_sent} threshold alert(s). Inbox delivery is not yet confirmed.` : "Unable to send the consolidated report.");
       await loadDashboard();
     } catch (reason) { setMessage(reason instanceof Error ? reason.message : "Unable to send email alerts."); }
     finally { setLoading(false); }
@@ -76,11 +76,13 @@ export function EmailAlertsPage({ analysisDate }: Props) {
 
   if (!config || !dashboard) return <div className="card review-empty">{message ?? "Loading email alert settings…"}</div>;
   const nextRun = dashboard.next_scheduled_at ? new Date(dashboard.next_scheduled_at).toLocaleString() : "Scheduling paused";
+  const ownerAddresses = Object.values(config.owner_emails).map((value) => value.trim().toLowerCase()).filter(Boolean);
+  const sharedOwnerAddress = ownerAddresses.length > 1 && new Set(ownerAddresses).size === 1;
 
   return <section className="email-page">
     <div className="card scheduler-summary">
       <div className="scheduler-heading"><div><CalendarClock size={24} /><div><h2>Email alert scheduler</h2><p>Consolidated reporting across all hospitals and conditions</p></div></div><span className={`scheduler-state ${dashboard.scheduler_status}`}><CheckCircle2 size={15} /> {dashboard.scheduler_status}</span></div>
-      <div className="scheduler-facts"><div><small>Next scheduled run</small><strong>{nextRun}</strong></div><div><small>Recipients</small><strong>{config.recipients.length} To · {config.cc.length} CC</strong></div><div><small>SMTP delivery</small><strong>{dashboard.smtp_configured ? "Configured" : "Configuration required"}</strong></div></div>
+      <div className="scheduler-facts"><div><small>Next scheduled run</small><strong>{nextRun}</strong></div><div><small>Recipients</small><strong>{config.recipients.length} To · {config.cc.length} CC</strong></div><div><small>SMTP submission</small><strong>{dashboard.smtp_configured ? "Configured" : "Configuration required"}</strong></div></div>
     </div>
 
     <NotificationBanner message={message} onDismiss={() => setMessage(null)} />
@@ -92,13 +94,13 @@ export function EmailAlertsPage({ analysisDate }: Props) {
         <EmailList title="Recipients (To)" values={config.recipients} input={recipientInput} setInput={setRecipientInput} onAdd={() => addEmail("recipients", recipientInput)} onRemove={(email) => removeEmail("recipients", email)} />
         <EmailList title="CC" values={config.cc} input={ccInput} setInput={setCcInput} onAdd={() => addEmail("cc", ccInput)} onRemove={(email) => removeEmail("cc", email)} />
         <div className="incident-master-editor"><div><h3>Incident master review notification</h3><p>This address receives a card whenever a corroborated alert is sent for review.</p></div><label>Incident master email<input type="email" value={config.incident_master_email ?? ""} onChange={(event) => setConfig({ ...config, incident_master_email: event.target.value })} /></label></div>
-        <div className="owner-email-editor"><div><h3>Task owner notifications</h3><p>Each newly approved response task is emailed to its responsible role.</p></div>{["Epidemiology lead", "Operations lead", "Incident communications", "Incident Commander"].map((role) => <label key={role}>{role}<input type="email" value={config.owner_emails[role] ?? ""} onChange={(event) => setConfig({ ...config, owner_emails: { ...config.owner_emails, [role]: event.target.value } })} /></label>)}</div>
+        <div className="owner-email-editor"><div><h3>Task owner notifications</h3><p>Each newly approved response task is emailed to its responsible role.</p>{sharedOwnerAddress && <p className="shared-owner-warning">All roles currently use one mailbox. Separate department heads will not receive these messages unless their own addresses are configured.</p>}</div>{["Epidemiology lead", "Operations lead", "Incident communications", "Incident Commander"].map((role) => <label key={role}>{role}<input type="email" value={config.owner_emails[role] ?? ""} onChange={(event) => setConfig({ ...config, owner_emails: { ...config.owner_emails, [role]: event.target.value } })} /></label>)}</div>
         <div className="email-config-actions"><button className="save-email-button" onClick={save} disabled={loading}><Save size={16} /> Save configuration</button><button className="send-now-button" onClick={sendNow} disabled={loading || !dashboard.smtp_configured}><Send size={16} /> Send consolidated report for {analysisDate}</button></div>
       </div>
 
       <aside className="email-side">
-        <div className="card activity-snapshot"><h3>Activity snapshot</h3><div><span><small>Total successful sends</small><strong>{dashboard.total_sends}</strong></span><span><small>Configured time</small><strong>{config.schedule_time.slice(0, 5)}</strong></span></div></div>
-        <div className="card send-history"><div className="history-heading"><h3><RefreshCw size={17} /> Send history</h3><button onClick={load} disabled={loading}>Refresh</button></div>{dashboard.history.length === 0 ? <p className="history-empty">No email attempts recorded.</p> : <div className="history-list">{dashboard.history.map((item) => <div className="history-item" key={item.id}><div><strong>{new Date(item.sent_at).toLocaleString()}</strong><span className={`delivery-status ${item.status}`}>{item.status}</span></div><p>{item.subject ?? item.error_message ?? "No eligible alerts"}</p><small>{item.trigger_mode} · {item.recipients.length + item.cc.length} recipient(s) · {item.alert_ids.length} alert(s)</small></div>)}</div>}</div>
+        <div className="card activity-snapshot"><h3>Activity snapshot</h3><div><span><small>Consolidated reports accepted by SMTP</small><strong>{dashboard.total_sends}</strong></span><span><small>Configured time</small><strong>{config.schedule_time.slice(0, 5)}</strong></span></div></div>
+        <div className="card send-history"><div className="history-heading"><h3><RefreshCw size={17} /> Send history</h3><button onClick={load} disabled={loading}>Refresh</button></div>{dashboard.history.length === 0 ? <p className="history-empty">No email attempts recorded.</p> : <div className="history-list">{dashboard.history.map((item) => <div className="history-item" key={item.id}><div><strong>{new Date(item.sent_at).toLocaleString()}</strong><span className={`delivery-status ${item.status}`}>{item.status === "success" ? "SMTP accepted" : item.status}</span></div><p>{item.subject ?? item.error_message ?? "No eligible alerts"}</p><small>{item.trigger_mode} · {item.recipients.length + item.cc.length} recipient(s) · {item.alert_ids.length} alert(s)</small></div>)}</div>}</div>
       </aside>
     </div>
   </section>;
