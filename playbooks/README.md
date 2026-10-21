@@ -44,3 +44,8 @@ python -m app.index_playbooks
 ```
 
 Set `PINECONE_RAG_ENABLED=true` only after indexing. If Pinecone is disabled, unavailable, or temporarily fails, the application returns the deterministic plan and marks retrieval as `fallback`; it does not invent or remove response actions.
+
+
+## Adding diseases and replacing guidance
+
+Any explicitly named disease can be uploaded. Use canonical `condition_guidance` / `condition_actions` keys such as `measles` or `cholera`, and optional `condition_names` for display labels. Section-based files may use `disease` or `condition_code`. Activation registers new diseases and fully replaces previous rules for each included disease. Older documents remain for audit; they are not merged into recommendations or restored automatically on deactivation. Use the library's current-rule preview to demonstrate a disease before adding surveillance observations. The previously supplied Measles and Cholera demo JSON files are now accepted by the parser.

@@ -565,3 +565,10 @@ Every workflow execution produces a `WorkflowRun` object with fine-grained execu
 `frontend/src/PlaybookLibraryPage.tsx` replaces the validation-only page with upload status, source downloads, action review, activation and deactivation. New routes are documented in the root README. `pinecone_rag.py` retrieves active uploaded actions by disease, severity and incident context, verifies IDs against Supabase records, and falls back to bundled guidance if retrieval is unavailable. Task records preserve `source_document_id` and `source_action_id`.
 
 `supabase/playbook_uploads.sql` and its migration define the private library and source bucket. The library is server-access-only with RLS and explicit revocation of public table privileges. No frontend API keys are introduced.
+
+
+## Dynamic disease rules — 21 October 2026
+
+`disease_codes.py` normalizes explicitly named diseases without a fixed three-disease allowlist. Upload parsing records canonical codes and display names. The Supabase `activate_playbook_rules` RPC registers conditions and atomically updates the one-current-document-per-disease registry. It is security-invoker and executable only by the service role. Replacement/deactivation events are recorded separately.
+
+`uploaded_response_plan` resolves only the document referenced by that registry. Disabled, missing or incomplete current rules never resurrect older rules; Pinecone failures use canonical actions from the current document only. Approval endpoints check that a current action set exists before changing alert state. The frontend shows effective disease bindings and supports previewing recommendations without observation data. Existing surveillance data remains the original three diseases until additional observations are supplied.

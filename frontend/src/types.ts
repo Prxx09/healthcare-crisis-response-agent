@@ -107,6 +107,8 @@ export interface ResponsePlan {
   condition_guidance: string[];
   approval_required: boolean;
   boundary: string;
+  available?: boolean;
+  unavailable_reason?: string;
 }
 export interface PlaybookLibrary {
   active_version: string;
@@ -114,6 +116,7 @@ export interface PlaybookLibrary {
   max_file_bytes: number;
   validation_only: boolean;
   documents: PlaybookDocument[];
+  condition_rules: PlaybookConditionRule[];
   uploads_error: string | null;
   indexing_configured: boolean;
   ai_configured: boolean;
@@ -263,4 +266,11 @@ export interface PlaybookDocument {
   reviewed_by: string | null;
   actions: UploadedPlaybookAction[];
   duplicate?: boolean;
+}
+
+export interface PlaybookConditionRule {
+  condition_code: string;
+  document_id: string;
+  enabled: boolean;
+  reviewed_by: string;
 }

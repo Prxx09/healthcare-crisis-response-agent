@@ -139,11 +139,11 @@ class UploadTests(unittest.IsolatedAsyncioTestCase):
     async def test_uploaded_plan_replaces_bundled_actions_and_falls_back(self):
         from app.pinecone_rag import select_response_plan_with_rag
         action = {'action_id':'0','source_document_id':'a'*64,'action':'Verify pending dengue tests.'}
-        with patch('app.pinecone_rag.retrieve_playbook_context', new=AsyncMock(return_value={'enabled':True,'status':'ready','matches':[]})), patch('app.playbook_uploads.uploaded_actions', new=AsyncMock(return_value=[action])):
+        with patch('app.pinecone_rag.retrieve_playbook_context', new=AsyncMock(return_value={'enabled':True,'status':'ready','matches':[]})), patch('app.playbook_uploads.uploaded_response_plan', new=AsyncMock(return_value={'action_source':'uploaded','actions':[action]})):
             result = await select_response_plan_with_rag(settings(pinecone_rag_enabled=True), 'dengue','investigate','pending labs')
         self.assertEqual(result['action_source'],'uploaded')
         self.assertEqual(result['actions'],[action])
-        with patch('app.pinecone_rag.retrieve_playbook_context', new=AsyncMock(return_value={'enabled':True,'status':'ready','matches':[]})), patch('app.playbook_uploads.uploaded_actions', new=AsyncMock(return_value=[])):
+        with patch('app.pinecone_rag.retrieve_playbook_context', new=AsyncMock(return_value={'enabled':True,'status':'ready','matches':[]})), patch('app.playbook_uploads.uploaded_response_plan', new=AsyncMock(return_value=None)):
             result = await select_response_plan_with_rag(settings(pinecone_rag_enabled=True), 'dengue','investigate')
         self.assertEqual(result['action_source'],'bundled')
         self.assertTrue(result['actions'])
@@ -153,8 +153,8 @@ class UploadTests(unittest.IsolatedAsyncioTestCase):
         repo = MagicMock(); repo.privileged_get=AsyncMock(return_value=[])
         with patch('app.playbook_uploads.SupabaseRepository',return_value=repo):
             self.assertEqual(await uploaded_actions(settings(),'ili','monitor','query'),[])
-        self.assertEqual(repo.privileged_get.call_args.args[1]['active'],'eq.true')
-        self.assertEqual(repo.privileged_get.call_args.args[1]['status'],'eq.indexed')
+        self.assertEqual(repo.privileged_get.call_args.args[0],'playbook_condition_rules')
+        self.assertEqual(repo.privileged_get.call_args.args[1]['condition_code'],'eq.ili')
 
     def test_first_upload_skips_cleanup_and_creates_vectors(self):
         client=MagicMock();client.inference.embed.return_value={'data':[{'values':[0.1]}]}

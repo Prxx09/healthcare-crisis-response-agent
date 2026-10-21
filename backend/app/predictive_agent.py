@@ -135,8 +135,6 @@ async def _run_tool(name: str, repository: SupabaseRepository, analysis_date: da
 
 
 async def run_predictive_agent(repository: SupabaseRepository, settings: Settings, analysis_date: date, hospital: str, condition: str) -> dict[str, Any]:
-    if condition not in {"ili", "age", "dengue"}:
-        raise ValueError("Unsupported condition")
     visits = await repository.get_observations((analysis_date - timedelta(days=28)).isoformat(), analysis_date.isoformat(), hospital, condition, "visits")
     forecast = build_scenarios(visits, analysis_date, 7)
     readiness_rows = await repository.get_hospital_context(analysis_date.isoformat(), analysis_date.isoformat(), hospital)

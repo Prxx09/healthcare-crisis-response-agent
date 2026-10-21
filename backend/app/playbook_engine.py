@@ -19,7 +19,7 @@ def select_response_plan(condition_code: str, level: str) -> dict[str, Any]:
     if level not in playbooks["levels"]:
         raise ValueError("Unsupported alert level")
     if condition_code not in playbooks["condition_guidance"]:
-        raise ValueError("Unsupported condition")
+        raise ValueError("No activated playbook exists for this disease. Upload and activate one first.")
     # Disease-specific actions are authoritative when supplied by the approved
     # package. Keep the generic level fallback for older playbook files.
     actions = playbooks.get("condition_actions", {}).get(condition_code, {}).get(level)

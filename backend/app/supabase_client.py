@@ -55,6 +55,13 @@ class SupabaseRepository:
         response.raise_for_status()
         return response.json()
 
+    async def activate_playbook_rules(self, document_id: str, active: bool, reviewer: str) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(f"{self.base_url}/rpc/activate_playbook_rules", headers=self._write_headers(),
+                json={"p_document_id": document_id, "p_active": active, "p_reviewer": reviewer})
+        response.raise_for_status()
+        return response.json()
+
     async def get_hospitals(self) -> list[dict[str, Any]]:
         return await self.get("hospitals", {"select": "id,code,name,bed_capacity", "active": "eq.true", "order": "name"})
 

@@ -52,6 +52,15 @@ async def _approve_alert_from_agent(
 ) -> dict:
     if not _agent_may_approve(alert["alert_level"], assessment_result):
         return {"approved": False, "actions_created": 0, "owner_notifications": {"sent": 0, "failed": 0, "skipped": 0}}
+    condition_code = alert.get("conditions", {}).get("code") or alert.get("evidence_summary", {}).get("condition_code")
+    plan = await select_response_plan_with_rag(
+        settings,
+        condition_code,
+        alert["alert_level"],
+        query_context=json.dumps({"evidence": alert.get("evidence_summary"), "pressure": assessment_result.get("pressure")})[:4000],
+    )
+    if not plan["actions"]:
+        return {"approved": False, "actions_created": 0, "owner_notifications": {"sent": 0, "failed": 0, "skipped": 0}}
     decision_time = datetime.now(timezone.utc)
     rationale = str((assessment_result.get("pre_approval") or {}).get("rationale") or "Agent approval policy passed.")
     decided = await repository.decide_alert(alert["id"], {
@@ -62,13 +71,6 @@ async def _approve_alert_from_agent(
     })
     if not decided:
         return {"approved": False, "actions_created": 0, "owner_notifications": {"sent": 0, "failed": 0, "skipped": 0}}
-    condition_code = alert.get("conditions", {}).get("code") or alert.get("evidence_summary", {}).get("condition_code")
-    plan = await select_response_plan_with_rag(
-        settings,
-        condition_code,
-        alert["alert_level"],
-        query_context=json.dumps({"evidence": alert.get("evidence_summary"), "pressure": assessment_result.get("pressure")})[:4000],
-    )
     created_actions = await repository.create_actions(action_rows(alert["id"], plan["actions"], decision_time))
     notifications = {"sent": 0, "failed": 0, "skipped": 0}
     try:
@@ -322,6 +324,10 @@ async def response_plan(
 ) -> dict:
     try:
         return await select_response_plan_with_rag(settings, condition_code, alert_level, query_context)
+    except RuntimeError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except httpx.HTTPError as error:
+        raise HTTPException(status_code=502, detail="Unable to retrieve current playbook rules") from error
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
@@ -412,17 +418,19 @@ class PlaybookActivation(BaseModel):
 @app.get("/api/v1/playbooks")
 async def playbooks() -> dict:
     from .playbook_engine import load_playbooks
-    documents, error = [], None
+    documents, rules, error = [], [], None
     try:
-        documents = await SupabaseRepository().privileged_get(PLAYBOOK_TABLE, {
+        repository = SupabaseRepository()
+        documents = await repository.privileged_get(PLAYBOOK_TABLE, {
             "select": "id,filename,format,size_bytes,status,active,vector_count,extraction_method,error_message,created_at,reviewed_by,actions",
             "order": "created_at.desc", "limit": "100",
         })
+        rules = await repository.privileged_get("playbook_condition_rules", {"select": "condition_code,document_id,enabled,reviewed_by", "order": "condition_code"})
     except (RuntimeError, httpx.HTTPError):
         error = "Upload library unavailable. Configure SUPABASE_SECRET_KEY and apply the playbook schema."
     return {"active_version": str(load_playbooks()["version"]),
         "supported_formats": sorted(extension.lstrip(".") for extension in SUPPORTED_EXTENSIONS),
-        "max_file_bytes": MAX_FILE_BYTES, "validation_only": False, "documents": documents,
+        "max_file_bytes": MAX_FILE_BYTES, "validation_only": False, "documents": documents, "condition_rules": rules,
         "uploads_error": error, "indexing_configured": bool(settings.pinecone_api_key),
         "ai_configured": settings.ai_provider != "deterministic", "retrieval_enabled": settings.pinecone_rag_enabled}
 
@@ -472,15 +480,7 @@ async def activate_playbook(document_id: str, request: PlaybookActivation) -> di
             raise HTTPException(status_code=404, detail="Playbook not found")
         if request.active and rows[0]["status"] != "indexed":
             raise HTTPException(status_code=409, detail="Only successfully indexed playbooks can be activated")
-        if request.active:
-            active = await repository.privileged_get(PLAYBOOK_TABLE, {"select": "id", "active": "eq.true"})
-            if len(active) >= 20 and document_id not in {item["id"] for item in active}:
-                raise HTTPException(status_code=409, detail="Deactivate a playbook first; at most 20 can be active")
-        result = await repository.patch(PLAYBOOK_TABLE, {"id": f"eq.{document_id}"}, {
-            "active": request.active, "reviewed_by": reviewer,
-            "reviewed_at": datetime.now(timezone.utc).isoformat(), "updated_at": datetime.now(timezone.utc).isoformat(),
-        })
-        return {key: value for key, value in result[0].items() if key != "extracted_text"}
+        return await repository.activate_playbook_rules(document_id, request.active, reviewer)
     except RuntimeError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
     except httpx.HTTPError as error:
@@ -625,6 +625,12 @@ async def decide_alert(alert_id: int, request: AlertDecisionRequest) -> dict:
         alert = await repository.get_alert(alert_id)
         if not alert:
             raise HTTPException(status_code=404, detail="Alert not found")
+        plan = None
+        if request.status == "approved":
+            plan = await select_response_plan_with_rag(settings, alert["conditions"]["code"], alert["alert_level"],
+                query_context=json.dumps(alert.get("evidence_summary", {}))[:4000])
+            if not plan["actions"]:
+                raise HTTPException(status_code=409, detail=plan.get("unavailable_reason", "Current playbook has no actions for this alert"))
         decision_time = datetime.now(timezone.utc)
         result = await repository.decide_alert(alert_id, {
             "status": request.status,
@@ -634,12 +640,6 @@ async def decide_alert(alert_id: int, request: AlertDecisionRequest) -> dict:
         })
         created_actions = []
         if result and request.status == "approved":
-            plan = await select_response_plan_with_rag(
-                settings,
-                alert["conditions"]["code"],
-                alert["alert_level"],
-                query_context=json.dumps(alert.get("evidence_summary", {}))[:4000],
-            )
             created_actions = await repository.create_actions(action_rows(alert_id, plan["actions"], decision_time))
             try:
                 notification_result = await send_task_owner_notifications(repository, settings, alert, created_actions)

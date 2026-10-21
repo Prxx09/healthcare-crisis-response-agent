@@ -195,32 +195,22 @@ async def select_response_plan_with_rag(
     alert_level: str,
     query_context: str | None = None,
 ) -> dict[str, Any]:
-    # Bundled actions remain a fallback; active uploads provide source-verified actions.
+    from .disease_codes import normalize_disease_code
+    from .playbook_uploads import uploaded_response_plan
     from .playbook_engine import select_response_plan
 
+    if alert_level not in {"monitor", "investigate", "escalate"}:
+        raise ValueError("Unsupported alert level")
+    condition_code = normalize_disease_code(condition_code)
+    uploaded = await uploaded_response_plan(settings, condition_code, alert_level,
+        f"{condition_code} {alert_level}. {query_context or 'Hospital response actions'}")
+    if uploaded is not None:
+        return uploaded
     plan = select_response_plan(condition_code, alert_level)
     retrieval = await retrieve_playbook_context(settings, condition_code, alert_level, query_context)
-    plan["retrieval"] = {
-        "enabled": retrieval["enabled"],
-        "status": retrieval["status"],
-        "match_count": len(retrieval["matches"]),
-        "matches": retrieval["matches"],
-    }
+    plan["retrieval"] = {"enabled": retrieval["enabled"], "status": retrieval["status"],
+        "match_count": len(retrieval["matches"]), "matches": retrieval["matches"]}
     plan["retrieved_guidance"] = [match["text"] for match in retrieval["matches"] if match.get("text")]
     plan["action_source"] = "bundled"
-    if settings.pinecone_rag_enabled:
-        try:
-            from .playbook_uploads import uploaded_actions
-            actions = await uploaded_actions(settings, condition_code, alert_level,
-                f"{condition_code} {alert_level}. {query_context or 'Hospital response actions'}")
-            if actions:
-                plan["actions"] = actions
-                plan["playbook_version"] = "uploaded:" + ",".join(sorted({a["source_document_id"][:12] for a in actions}))
-                plan["approval_required"] = True
-                plan["action_source"] = "uploaded"
-                plan["retrieval"]["status"] = "ready"
-            plan["uploaded_retrieval_status"] = "ready" if actions else "no_matches"
-        except Exception:
-            logger.exception("Uploaded playbook retrieval unavailable; using bundled actions")
-            plan["uploaded_retrieval_status"] = "fallback"
+    plan["available"] = True
     return plan

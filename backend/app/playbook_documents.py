@@ -11,6 +11,8 @@ import yaml
 from docx import Document
 from pypdf import PdfReader
 
+from .disease_codes import normalize_disease_code
+
 
 SUPPORTED_EXTENSIONS = {".json", ".yaml", ".yml", ".docx", ".pdf"}
 MAX_FILE_BYTES = 5 * 1024 * 1024
@@ -45,13 +47,8 @@ def _section_playbook(payload: dict[str, Any]) -> dict[str, Any]:
     version = payload.get("document_version")
     if isinstance(version, bool) or not isinstance(version, (str, int, float)) or not str(version).strip():
         raise ValueError("Section-based playbooks require document_version")
-    condition = payload.get("condition_code")
-    if condition is None:
-        aliases = {"dengue": "dengue", "ili": "ili", "influenza-like illness": "ili", "age": "age", "acute gastroenteritis": "age"}
-        disease = payload.get("disease")
-        condition = aliases.get(disease.strip().lower()) if isinstance(disease, str) else None
-    if not isinstance(condition, str) or condition not in {"ili", "age", "dengue"}:
-        raise ValueError("Section-based playbooks require condition_code: ili, age or dengue")
+    condition = normalize_disease_code(payload.get("condition_code") or payload.get("disease"))
+    condition_name = payload.get("disease") or condition.replace("_", " ").title()
     sections = payload.get("sections")
     if not isinstance(sections, list) or not sections:
         raise ValueError("Playbook sections must be a non-empty list")
@@ -82,7 +79,7 @@ def _section_playbook(payload: dict[str, Any]) -> dict[str, Any]:
     if any(not actions for actions in levels.values()):
         raise ValueError("Section-based playbooks require instructions for monitor, investigate and escalate")
     guidance = payload.get("purpose") or payload.get("title") or "Review the original playbook before activating its actions."
-    return {"version": str(version), "levels": levels, "condition_actions": {condition: levels},
+    return {"version": str(version), "condition_names": {condition: condition_name}, "levels": levels, "condition_actions": {condition: levels},
             "condition_guidance": {condition: [guidance] if isinstance(guidance, str) else []}}
 
 
@@ -126,7 +123,30 @@ def _validate_playbook(payload: Any) -> dict[str, Any]:
     guidance = payload.get("condition_guidance")
     if not isinstance(guidance, dict) or not all(isinstance(items, list) for items in guidance.values()):
         raise ValueError("condition_guidance must map condition codes to lists")
-    return payload
+    if not guidance:
+        raise ValueError("The playbook must identify at least one disease")
+    normalized = {}
+    original_keys = {}
+    for original, items in guidance.items():
+        code = normalize_disease_code(original)
+        if code in normalized:
+            raise ValueError(f"Duplicate disease after normalization: {code}")
+        normalized[code] = items
+        original_keys[original] = code
+    names = payload.get("condition_names", {})
+    if not isinstance(names, dict):
+        raise ValueError("condition_names must map codes to disease names")
+    normalized_names = {original_keys[k]: names.get(k, k.replace("_", " ").title()) for k in guidance}
+    if any(not isinstance(name, str) or not name.strip() or len(name) > 160 for name in normalized_names.values()):
+        raise ValueError("Disease names must be non-empty text of at most 160 characters")
+    normalized_actions = {}
+    for original, actions in payload.get("condition_actions", {}).items():
+        code = normalize_disease_code(original)
+        if code not in normalized or code in normalized_actions:
+            raise ValueError("condition_actions must match the diseases declared in condition_guidance")
+        normalized_actions[code] = actions
+    return {**payload, "condition_guidance": normalized, "condition_names": normalized_names,
+            **({"condition_actions": normalized_actions} if "condition_actions" in payload else {})}
 
 
 def parse_playbook_document(filename: str, data: bytes) -> dict[str, Any]:

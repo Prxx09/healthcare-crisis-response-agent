@@ -68,3 +68,14 @@ Investigation and forecasting execute concurrently after signal analysis. The wo
 For a selected hospital, disease, and analysis date, the user can run the predictive agent. The visit scenario uses reported days and a three-day median anchor so one spike cannot dictate the trajectory. The agent selects up to four checks from historical visits, lab positives, reporting quality, pharmacy demand, and hospital readiness. Groq or Hugging Face can choose the next read-only check when configured; a bounded policy continues the investigation if the model is unavailable. Each choice, reason, and result is saved in Supabase.
 
 The agent looks for conflicting lab trends and incomplete reporting before giving an operational assessment. It may create an internal request for a laboratory, surveillance, or operations lead to verify missing evidence. Requests are deduplicated by hospital, disease, date, and purpose. Completing a request saves the result and triggers a fresh assessment in the dashboard. Forecasts are planning scenarios, not admission predictions or diagnoses. Incident Commander approval is still required for controlled response actions.
+
+
+## Dynamic disease and replacement workflow
+
+1. Upload a playbook for any explicitly named disease; parse structured formats or use source-verified LLM extraction.
+2. Index the extracted actions and review their names, disease codes, levels, owners and timing.
+3. Activate the document to register new diseases and replace the entire current response ruleset for every disease it covers.
+4. Search only the current document for a disease. If search is unavailable, use that same document’s stored actions. Never merge or restore older disease rules automatically.
+5. Preview current rules in the library. Surveillance forecasts for newly registered diseases require observations.
+
+Replacement is atomic per activation and logged. Deactivating a document disables its remaining current bindings; it does not disable newer replacements or revert to bundled rules. Existing issued tasks retain their source history.
