@@ -16,6 +16,7 @@ export function EmailAlertsPage({ analysisDate }: Props) {
 
   function load() {
     setLoading(true);
+    setMessage(null);
     api.emailAlertDashboard()
       .then((result) => { setDashboard(result); setConfig(result.config); })
       .catch((reason: Error) => setMessage(reason.message))
@@ -74,7 +75,7 @@ export function EmailAlertsPage({ analysisDate }: Props) {
     finally { setLoading(false); }
   }
 
-  if (!config || !dashboard) return <div className="card review-empty">{message ?? "Loading email alert settings…"}</div>;
+  if (!config || !dashboard) return <section className="email-page"><div className="card review-empty" role={message ? "alert" : "status"}>{loading && <span className="inline-spinner" aria-hidden="true" />}<strong>{message ? "Email settings unavailable" : "Loading email alert settings…"}</strong>{message && <><p>{message}</p><button onClick={load}><RefreshCw size={16} aria-hidden="true" /> Retry</button></>}</div></section>;
   const nextRun = dashboard.next_scheduled_at ? new Date(dashboard.next_scheduled_at).toLocaleString() : "Scheduling paused";
   const ownerAddresses = Object.values(config.owner_emails).map((value) => value.trim().toLowerCase()).filter(Boolean);
   const sharedOwnerAddress = ownerAddresses.length > 1 && new Set(ownerAddresses).size === 1;
