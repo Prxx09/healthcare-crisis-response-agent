@@ -272,3 +272,66 @@ button:disabled { cursor: not-allowed; }
 .uploaded-actions blockquote { border-left:3px solid #3b82f6; margin:12px 0; padding-left:12px; }
 .playbook-notice { padding:16px; }
 @media(max-width:700px) { .playbook-review-toolbar { align-items:stretch; flex-direction:column; } .uploaded-actions .response-action { display:block; } }
+
+/* Predictive investigation: readable evidence and clear follow-up actions. */
+.card.predictive-agent-panel { padding: 24px; margin-bottom: 18px; gap: 24px; min-width: 0; border-top: 4px solid #175c8f; }
+.agent-panel-heading { align-items: flex-start; gap: 20px; padding-bottom: 20px; border-bottom: 1px solid #e1e8ef; }
+.agent-eyebrow { display: block; margin-bottom: 6px; color: #287766; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.agent-panel-heading h2 { margin: 0; font-size: 21px; color: #17324a; }
+.agent-panel-heading p { margin: 8px 0 0; max-width: 650px; color: #607487; font-size: 13px; line-height: 1.6; }
+.predictive-agent-panel button { padding: 10px 16px; border-radius: 7px; font-size: 12px; font-weight: 700; cursor: pointer; }
+.agent-panel-heading button { flex-shrink: 0; margin: 0; }
+.predictive-agent-panel button:disabled { cursor: wait; opacity: .6; }
+.predictive-agent-panel :is(button, input, summary):focus-visible { outline: 3px solid #86b9dd; outline-offset: 3px; }
+.predictive-agent-panel .agent-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; align-items: stretch; }
+.predictive-agent-panel .agent-summary > article { padding: 16px; background: #f6f9fc; border: 1px solid #e0e8ef; border-radius: 9px; min-width: 0; }
+.agent-summary article > span { display: block; color: #607487; font-size: 11px; font-weight: 700; }
+.agent-summary article > strong { display: block; margin: 10px 0 7px; font-size: 23px; color: #17324a; text-transform: capitalize; overflow-wrap: anywhere; }
+.agent-summary article > small { color: #697e90; font-size: 11px; }
+.agent-summary article > .agent-review-date { font-size: 17px; line-height: 1.6; }
+.agent-summary .agent-status.prepare { color: #95631b; }
+.agent-summary .agent-status.watch { color: #175c8f; }
+.agent-summary .agent-status.uncertain { color: #9c4c38; }
+.agent-summary .agent-status.routine { color: #287766; }
+.agent-finding { padding: 18px 20px; background: #f0f6fa; border-left: 3px solid #337da6; border-radius: 8px; }
+.predictive-agent-panel h3 { font-size: 15px; color: #17324a; margin: 0; }
+.agent-finding p { margin: 9px 0 0; color: #41596c; font-size: 13px; line-height: 1.65; }
+.agent-finding .agent-interpretation { color: #657b8d; font-size: 12px; }
+.agent-section-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 14px; }
+.agent-section-heading > span { color: #718396; font-size: 11px; }
+.agent-evidence-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.agent-evidence-card { border: 1px solid #dfe7ee; border-radius: 10px; padding: 18px; min-width: 0; }
+.agent-evidence-title { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
+.agent-evidence-title h4 { margin: 0; color: #21445e; font-size: 14px; }
+.agent-evidence-title > span, .agent-request-status { border-radius: 12px; background: #edf4fa; color: #326184; font-size: 10px; padding: 4px 9px; font-weight: 700; }
+.agent-check-reason { color: #607487; font-size: 12px; line-height: 1.65; margin: 12px 0; overflow-wrap: anywhere; }
+.agent-evidence-values { margin: 0; }
+.agent-evidence-values > div { display: flex; justify-content: space-between; gap: 18px; border-top: 1px solid #edf1f5; padding: 9px 0; font-size: 12px; }
+.agent-evidence-values dt { color: #64798b; }
+.agent-evidence-values dd { margin: 0; color: #203e55; font-weight: 700; text-align: right; overflow-wrap: anywhere; min-width: 0; }
+.agent-source-details { margin-top: 10px; font-size: 11px; color: #637b8f; }
+.agent-source-details summary { cursor: pointer; width: fit-content; }
+.agent-source-details pre { max-height: 220px; overflow: auto; padding: 12px; background: #f5f8fa; border-radius: 6px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; line-height: 1.5; }
+.agent-data-warning { background: #fff6e8; color: #805d24; padding: 10px; border-radius: 6px; font-size: 12px; }
+.agent-requests { gap: 12px; }
+.agent-requests > div { padding: 18px; background: #fbfcfe; }
+.agent-request-heading { display: flex; justify-content: space-between; gap: 12px; align-items: center; color: #21445e; font-size: 13px; }
+.agent-request-status { text-transform: capitalize; }
+.agent-request-status.completed { color: #287766; background: #e8f5ef; }
+.agent-requests p { color: #526b7d; font-size: 13px; line-height: 1.6; margin: 6px 0; }
+.agent-requests small { color: #718396; font-size: 11px; }
+.followup-complete { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; align-items: center; margin-top: 10px; }
+.followup-complete label { grid-column: 1 / -1; font-size: 11px; font-weight: 700; color: #526b7d; }
+.followup-complete input { min-width: 0; width: 100%; padding: 11px 12px; font: inherit; font-size: 12px; background: white; }
+.followup-complete button { background: #175c8f; color: white; border: 1px solid #175c8f; }
+.predictive-agent-panel .agent-boundary { margin: 0; padding: 12px 16px; font-size: 12px; line-height: 1.6; background: #fff8eb; border: 1px solid #ecdfc1; border-radius: 8px; color: #775d32; }
+@media (max-width: 1050px) { .predictive-agent-panel .agent-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 700px) {
+  .card.predictive-agent-panel { padding: 16px; gap: 20px; }
+  .agent-panel-heading { flex-direction: column; }
+  .agent-evidence-grid { grid-template-columns: minmax(0, 1fr); }
+  .followup-complete { grid-template-columns: minmax(0, 1fr); }
+  .followup-complete button { width: 100%; }
+  .agent-summary article > strong { font-size: 20px; }
+}
+@media (max-width: 400px) { .predictive-agent-panel .agent-summary { grid-template-columns: minmax(0, 1fr); } }
